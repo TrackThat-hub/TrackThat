@@ -10,6 +10,22 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a1a; color: #fff; min-height: 100vh; padding-bottom: 40px; }
 
+    /* ── PIN SCREEN ── */
+    .pin-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+    .pin-logo { font-size: 36px; font-weight: 700; letter-spacing: -1px; color: #fff; margin-bottom: 8px; }
+    .pin-tagline { font-size: 14px; color: #666; margin-bottom: 48px; }
+    .pin-prompt { font-size: 16px; color: #888; margin-bottom: 24px; }
+    .pin-dots { display: flex; gap: 16px; margin-bottom: 32px; }
+    .pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #444; background: transparent; transition: all 0.15s; }
+    .pin-dot.filled { background: #4A9EFF; border-color: #4A9EFF; }
+    .pin-dot.error { background: #FF5050; border-color: #FF5050; }
+    .pin-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 280px; }
+    .pin-key { background: #2a2a2a; border: none; border-radius: 14px; height: 72px; font-size: 24px; font-weight: 500; color: #fff; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; transition: background 0.1s; display: flex; align-items: center; justify-content: center; }
+    .pin-key:active { background: #3a3a3a; }
+    .pin-key.delete { font-size: 18px; color: #888; }
+    .pin-key.empty { background: transparent; cursor: default; }
+    .pin-error-msg { font-size: 13px; color: #FF5050; margin-top: 16px; height: 20px; text-align: center; }
+
     .header { background: #1a1a1a; padding: 60px 20px 20px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
     .header-left { flex-shrink: 0; }
     .header-left h1 { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: #fff; line-height: 1; }
@@ -287,118 +303,149 @@
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-left">
-      <h1>TRACK<span style="color:#4A9EFF">THAT</span></h1>
-      <p id="todays-date"></p>
+  <!-- PIN SCREEN -->
+  <div class="pin-screen" id="pin-screen">
+    <div class="pin-logo">TRACK<span style="color:#4A9EFF">THAT</span></div>
+    <div class="pin-tagline">Stay consistent.</div>
+    <div class="pin-prompt">Enter your PIN</div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="dot-0"></div>
+      <div class="pin-dot" id="dot-1"></div>
+      <div class="pin-dot" id="dot-2"></div>
+      <div class="pin-dot" id="dot-3"></div>
+      <div class="pin-dot" id="dot-4"></div>
+      <div class="pin-dot" id="dot-5"></div>
     </div>
-    <div class="header-middle">
-      <svg id="sparkline" viewBox="0 0 200 60" preserveAspectRatio="none">
-        <polyline id="spark-line" fill="none" stroke="#4A9EFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
-        <g id="spark-dots"></g>
-      </svg>
+    <div class="pin-keypad">
+      <button class="pin-key" onclick="pinPress('1')">1</button>
+      <button class="pin-key" onclick="pinPress('2')">2</button>
+      <button class="pin-key" onclick="pinPress('3')">3</button>
+      <button class="pin-key" onclick="pinPress('4')">4</button>
+      <button class="pin-key" onclick="pinPress('5')">5</button>
+      <button class="pin-key" onclick="pinPress('6')">6</button>
+      <button class="pin-key" onclick="pinPress('7')">7</button>
+      <button class="pin-key" onclick="pinPress('8')">8</button>
+      <button class="pin-key" onclick="pinPress('9')">9</button>
+      <button class="pin-key empty"></button>
+      <button class="pin-key" onclick="pinPress('0')">0</button>
+      <button class="pin-key delete" onclick="pinDelete()">⌫</button>
     </div>
-    <div class="header-right">
-      <h1>JAKE<span style="color:#4A9EFF">NOBLE</span></h1>
-      <p>Stay consistent.</p>
-    </div>
+    <div class="pin-error-msg" id="pin-error"></div>
   </div>
 
-  <nav class="nav">
-    <button class="active" onclick="showPage('home',this)">Home</button>
-    <button onclick="showPage('active',this)">Active Program</button>
-    <button onclick="showPage('designer',this)">Program Designer</button>
-    <button onclick="showPage('stl',this)">Surfing Through Life</button>
-    <button onclick="showPage('history',this)">Exercise History</button>
-  </nav>
+  <!-- MAIN APP (hidden until PIN unlocked) -->
+  <div id="app" style="display:none">
 
-  <!-- HOME -->
-  <div id="home" class="page active">
-    <div class="section-title">Training Stats</div>
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Total Workouts</div><div class="stat-value" id="stat-total-workouts">0</div><div class="stat-unit">completed</div></div>
-      <div class="stat-card"><div class="stat-label">Total Weight Lifted</div><div class="stat-value" id="stat-total-kg">0<span class="stat-inline-unit">kg</span></div><div class="stat-unit">&nbsp;</div></div>
-      <div class="stat-card"><div class="stat-label">Workouts This Month</div><div class="stat-value" id="stat-month-workouts">0</div><div class="stat-unit">completed</div></div>
-      <div class="stat-card"><div class="stat-label">Missed Sessions</div><div class="stat-value" id="stat-missed">0</div><div class="stat-unit">this month</div></div>
-    </div>
-    <div class="section-title">Insights</div>
-    <div class="insight-grid">
-      <div class="insight-card"><div class="i-label">Current Streak</div><div class="i-value" id="insight-streak">0 days</div><div class="i-sub" id="insight-best-streak">Best: 0 days</div></div>
-      <div class="insight-card"><div class="i-label">Volume vs Last Month</div><div class="i-value" id="insight-volume-trend">—</div><div class="i-sub" id="insight-volume-sub">calculating...</div></div>
-    </div>
-    <div class="insight-grid">
-      <div class="insight-card"><div class="i-label">Last Workout</div><div class="i-value" id="insight-last-workout">—</div><div class="i-sub" id="insight-last-workout-date">—</div></div>
-      <div class="insight-card"><div class="i-label">Most Recent PR</div><div class="i-value" id="insight-pr-name">—</div><div class="i-sub" id="insight-pr-weight">—</div></div>
-    </div>
-    <div class="insight-grid">
-      <div class="insight-card" style="grid-column:span 2;">
-        <div class="i-label">Days Using TrackThat</div>
-        <div style="display:flex;align-items:baseline;gap:10px;">
-          <div class="i-value blue" id="insight-days-since" style="font-size:32px;">0</div>
-          <div class="i-sub">days since you started — keep going 💪</div>
-        </div>
+    <div class="header">
+      <div class="header-left">
+        <h1>TRACK<span style="color:#4A9EFF">THAT</span></h1>
+        <p id="todays-date"></p>
+      </div>
+      <div class="header-middle">
+        <svg id="sparkline" viewBox="0 0 200 60" preserveAspectRatio="none">
+          <polyline id="spark-line" fill="none" stroke="#4A9EFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+          <g id="spark-dots"></g>
+        </svg>
+      </div>
+      <div class="header-right">
+        <h1>JAKE<span style="color:#4A9EFF">NOBLE</span></h1>
+        <p>Stay consistent.</p>
       </div>
     </div>
-    <div class="section-title">Active Program</div>
-    <div id="home-program-section"></div>
-    <div class="section-title">Surf Stats</div>
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Total Surfs</div><div class="stat-value" id="surf-total">0</div><div class="stat-unit">&nbsp;</div></div>
-      <div class="stat-card"><div class="stat-label">Total Time in Water</div><div class="stat-value" id="surf-time">0h</div><div class="stat-unit">&nbsp;</div></div>
-      <div class="stat-card"><div class="stat-label">Surfs This Month</div><div class="stat-value" id="surf-month">0</div><div class="stat-unit">&nbsp;</div></div>
-      <div class="stat-card"><div class="stat-label">Time in Water This Month</div><div class="stat-value" id="surf-time-month">0h</div><div class="stat-unit" id="surf-time-trend">vs last month</div></div>
-    </div>
-    <div class="surf-last-card">
-      <div><div class="surf-last-label">Last Surf</div><div class="surf-last-loc" id="surf-last-loc">—</div><div class="surf-last-date" id="surf-last-date">—</div></div>
-      <div style="font-size:28px">🌊</div>
-    </div>
-    <div class="section-title">Training This Month</div>
-    <div class="calendar-card"><div class="calendar-month-title" id="calendar-month-title"></div><div id="calendar-weeks"></div></div>
-    <div class="section-title">Life This Month</div>
-    <div class="calendar-card"><div class="calendar-month-title" id="life-calendar-month-title"></div><div id="life-calendar-weeks"></div></div>
-  </div>
 
-  <!-- ACTIVE -->
-  <div id="active" class="page"><div id="active-body"></div></div>
+    <nav class="nav">
+      <button class="active" onclick="showPage('home',this)">Home</button>
+      <button onclick="showPage('active',this)">Active Program</button>
+      <button onclick="showPage('designer',this)">Program Designer</button>
+      <button onclick="showPage('stl',this)">Surfing Through Life</button>
+      <button onclick="showPage('history',this)">Exercise History</button>
+    </nav>
 
-  <!-- DESIGNER -->
-  <div id="designer" class="page">
-    <div class="sub-nav">
-      <button class="sub-btn active" onclick="showDesignerSection('bank',this)">Exercise Bank</button>
-      <button class="sub-btn" onclick="showDesignerSection('programs',this)">My Programs</button>
-      <button class="sub-btn" onclick="showDesignerSection('builder',this)">Build New</button>
+    <!-- HOME -->
+    <div id="home" class="page active">
+      <div class="section-title">Training Stats</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total Workouts</div><div class="stat-value" id="stat-total-workouts">0</div><div class="stat-unit">completed</div></div>
+        <div class="stat-card"><div class="stat-label">Total Weight Lifted</div><div class="stat-value" id="stat-total-kg">0<span class="stat-inline-unit">kg</span></div><div class="stat-unit">&nbsp;</div></div>
+        <div class="stat-card"><div class="stat-label">Workouts This Month</div><div class="stat-value" id="stat-month-workouts">0</div><div class="stat-unit">completed</div></div>
+        <div class="stat-card"><div class="stat-label">Missed Sessions</div><div class="stat-value" id="stat-missed">0</div><div class="stat-unit">this month</div></div>
+      </div>
+      <div class="section-title">Insights</div>
+      <div class="insight-grid">
+        <div class="insight-card"><div class="i-label">Current Streak</div><div class="i-value" id="insight-streak">0 days</div><div class="i-sub" id="insight-best-streak">Best: 0 days</div></div>
+        <div class="insight-card"><div class="i-label">Volume vs Last Month</div><div class="i-value" id="insight-volume-trend">—</div><div class="i-sub" id="insight-volume-sub">calculating...</div></div>
+      </div>
+      <div class="insight-grid">
+        <div class="insight-card"><div class="i-label">Last Workout</div><div class="i-value" id="insight-last-workout">—</div><div class="i-sub" id="insight-last-workout-date">—</div></div>
+        <div class="insight-card"><div class="i-label">Most Recent PR</div><div class="i-value" id="insight-pr-name">—</div><div class="i-sub" id="insight-pr-weight">—</div></div>
+      </div>
+      <div class="insight-grid">
+        <div class="insight-card" style="grid-column:span 2;">
+          <div class="i-label">Days Using TrackThat</div>
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <div class="i-value blue" id="insight-days-since" style="font-size:32px;">0</div>
+            <div class="i-sub">days since you started — keep going 💪</div>
+          </div>
+        </div>
+      </div>
+      <div class="section-title">Active Program</div>
+      <div id="home-program-section"></div>
+      <div class="section-title">Surf Stats</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total Surfs</div><div class="stat-value" id="surf-total">0</div><div class="stat-unit">&nbsp;</div></div>
+        <div class="stat-card"><div class="stat-label">Total Time in Water</div><div class="stat-value" id="surf-time">0h</div><div class="stat-unit">&nbsp;</div></div>
+        <div class="stat-card"><div class="stat-label">Surfs This Month</div><div class="stat-value" id="surf-month">0</div><div class="stat-unit">&nbsp;</div></div>
+        <div class="stat-card"><div class="stat-label">Time in Water This Month</div><div class="stat-value" id="surf-time-month">0h</div><div class="stat-unit" id="surf-time-trend">vs last month</div></div>
+      </div>
+      <div class="surf-last-card">
+        <div><div class="surf-last-label">Last Surf</div><div class="surf-last-loc" id="surf-last-loc">—</div><div class="surf-last-date" id="surf-last-date">—</div></div>
+        <div style="font-size:28px">🌊</div>
+      </div>
+      <div class="section-title">Training This Month</div>
+      <div class="calendar-card"><div class="calendar-month-title" id="calendar-month-title"></div><div id="calendar-weeks"></div></div>
+      <div class="section-title">Life This Month</div>
+      <div class="calendar-card"><div class="calendar-month-title" id="life-calendar-month-title"></div><div id="life-calendar-weeks"></div></div>
     </div>
-    <div id="designer-bank" class="designer-section">
-      <div class="section-title" style="margin-top:16px">Exercise Bank</div>
-      <button class="btn" onclick="openAddExercise(null)">+ Add New Exercise</button>
-      <div id="bank-category-list" style="margin-top:16px"></div>
-    </div>
-    <div id="designer-programs" class="designer-section" style="display:none">
-      <div class="section-title" style="margin-top:16px">My Programs</div>
-      <button class="btn" onclick="showDesignerSection('builder',document.querySelectorAll('#designer .sub-btn')[2])">+ Build New Program</button>
-      <div id="programs-list" style="margin-top:16px"></div>
-    </div>
-    <div id="designer-builder" class="designer-section" style="display:none"><div id="builder-wrap"></div></div>
-  </div>
 
-  <!-- STL -->
-  <div id="stl" class="page">
-    <div class="sub-nav">
-      <button class="sub-btn active" onclick="showStlSection('surfing',this)">🌊 Surfing</button>
-      <button class="sub-btn" onclick="showStlSection('mobility',this)">🧘 Mobility</button>
-      <button class="sub-btn" onclick="showStlSection('reading',this)">📚 Reading</button>
-      <button class="sub-btn" onclick="showStlSection('mindfulness',this)">🌬️ Mindfulness</button>
-      <button class="sub-btn" onclick="showStlSection('sports',this)">🏅 Sports</button>
-    </div>
-    <div id="stl-surfing" class="designer-section"><div id="stl-surf-body"></div></div>
-    <div id="stl-mobility" class="designer-section" style="display:none"><div id="stl-mob-body"></div></div>
-    <div id="stl-reading" class="designer-section" style="display:none"><div id="stl-read-body"></div></div>
-    <div id="stl-mindfulness" class="designer-section" style="display:none"><div id="stl-mind-body"></div></div>
-    <div id="stl-sports" class="designer-section" style="display:none"><div id="stl-sports-body"></div></div>
-  </div>
+    <div id="active" class="page"><div id="active-body"></div></div>
 
-  <!-- HISTORY -->
-  <div id="history" class="page"><div id="history-body"></div></div>
+    <div id="designer" class="page">
+      <div class="sub-nav">
+        <button class="sub-btn active" onclick="showDesignerSection('bank',this)">Exercise Bank</button>
+        <button class="sub-btn" onclick="showDesignerSection('programs',this)">My Programs</button>
+        <button class="sub-btn" onclick="showDesignerSection('builder',this)">Build New</button>
+      </div>
+      <div id="designer-bank" class="designer-section">
+        <div class="section-title" style="margin-top:16px">Exercise Bank</div>
+        <button class="btn" onclick="openAddExercise(null)">+ Add New Exercise</button>
+        <div id="bank-category-list" style="margin-top:16px"></div>
+      </div>
+      <div id="designer-programs" class="designer-section" style="display:none">
+        <div class="section-title" style="margin-top:16px">My Programs</div>
+        <button class="btn" onclick="showDesignerSection('builder',document.querySelectorAll('#designer .sub-btn')[2])">+ Build New Program</button>
+        <div id="programs-list" style="margin-top:16px"></div>
+      </div>
+      <div id="designer-builder" class="designer-section" style="display:none"><div id="builder-wrap"></div></div>
+    </div>
+
+    <div id="stl" class="page">
+      <div class="sub-nav">
+        <button class="sub-btn active" onclick="showStlSection('surfing',this)">🌊 Surfing</button>
+        <button class="sub-btn" onclick="showStlSection('mobility',this)">🧘 Mobility</button>
+        <button class="sub-btn" onclick="showStlSection('reading',this)">📚 Reading</button>
+        <button class="sub-btn" onclick="showStlSection('mindfulness',this)">🌬️ Mindfulness</button>
+        <button class="sub-btn" onclick="showStlSection('sports',this)">🏅 Sports</button>
+      </div>
+      <div id="stl-surfing" class="designer-section"><div id="stl-surf-body"></div></div>
+      <div id="stl-mobility" class="designer-section" style="display:none"><div id="stl-mob-body"></div></div>
+      <div id="stl-reading" class="designer-section" style="display:none"><div id="stl-read-body"></div></div>
+      <div id="stl-mindfulness" class="designer-section" style="display:none"><div id="stl-mind-body"></div></div>
+      <div id="stl-sports" class="designer-section" style="display:none"><div id="stl-sports-body"></div></div>
+    </div>
+
+    <div id="history" class="page"><div id="history-body"></div></div>
+
+  </div><!-- end #app -->
 
   <!-- MODAL -->
   <div id="exercise-modal" class="modal-overlay" style="display:none">
@@ -406,7 +453,71 @@
   </div>
 
   <script>
+  // ══════════════════════════════════════
+  // ── PIN SYSTEM ──
+  // ══════════════════════════════════════
+  const CORRECT_PIN = '101215';
+  const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours in ms
+  let pinEntry = '';
+
+  function checkPinSession(){
+    const unlocked = localStorage.getItem('tt_pin_unlocked');
+    const unlockedAt = parseInt(localStorage.getItem('tt_pin_time')||'0');
+    if(unlocked==='true' && Date.now()-unlockedAt < SESSION_DURATION){
+      showApp();
+    }
+  }
+
+  function showApp(){
+    document.getElementById('pin-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    initApp();
+  }
+
+  function pinPress(digit){
+    if(pinEntry.length >= 6) return;
+    pinEntry += digit;
+    updatePinDots();
+    if(pinEntry.length === 6) setTimeout(checkPin, 80);
+  }
+
+  function pinDelete(){
+    if(pinEntry.length === 0) return;
+    pinEntry = pinEntry.slice(0,-1);
+    updatePinDots();
+    document.getElementById('pin-error').textContent='';
+  }
+
+  function updatePinDots(){
+    for(let i=0;i<6;i++){
+      const dot=document.getElementById('dot-'+i);
+      dot.classList.toggle('filled', i < pinEntry.length);
+      dot.classList.remove('error');
+    }
+  }
+
+  function checkPin(){
+    if(pinEntry === CORRECT_PIN){
+      localStorage.setItem('tt_pin_unlocked','true');
+      localStorage.setItem('tt_pin_time', Date.now().toString());
+      showApp();
+    } else {
+      // Flash red
+      for(let i=0;i<6;i++) document.getElementById('dot-'+i).classList.add('error');
+      document.getElementById('pin-error').textContent='Incorrect PIN. Try again.';
+      setTimeout(()=>{
+        pinEntry='';
+        updatePinDots();
+      },800);
+    }
+  }
+
+  // Check session on load
+  checkPinSession();
+
+  // ══════════════════════════════════════
   // ── HELPERS ──
+  // ══════════════════════════════════════
   function getData(k){return JSON.parse(localStorage.getItem(k)||'[]');}
   function saveData(k,v){localStorage.setItem(k,JSON.stringify(v));}
   function getItem(k){return localStorage.getItem(k);}
@@ -465,7 +576,6 @@
     if(pageId==='history')renderExerciseHistory();
   }
 
-  // ── HEADER ──
   function setHeaderDate(){document.getElementById('todays-date').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});}
 
   function drawSparkline(){
@@ -489,7 +599,6 @@
     });
   }
 
-  // ── STATS ──
   function renderTrainingStats(){
     const workouts=getData('tt_workouts'),today=new Date();
     document.getElementById('stat-total-workouts').textContent=workouts.length;
@@ -842,9 +951,7 @@
     body.innerHTML=html;
   }
 
-  // ══════════════════════════════════════
   // ── DESIGNER ──
-  // ══════════════════════════════════════
   function showDesignerSection(section,btn){
     document.querySelectorAll('.designer-section').forEach(s=>s.style.display='none');
     document.querySelectorAll('#designer .sub-btn').forEach(b=>b.classList.remove('active'));
@@ -880,7 +987,6 @@
   }
 
   function deleteExercise(id){
-    // Check if exercise is in any active program
     const programs=getData('tt_programs');
     const activeProgram=programs.find(p=>p.status==='active');
     if(activeProgram){
@@ -1008,28 +1114,21 @@
     else{
       day.sessions.forEach((session,si)=>{
         html+=`<div class="session-block"><div class="session-header"><input class="field-input" style="flex:1;padding:8px 12px;font-size:13px" type="text" placeholder="Session label e.g. AM — Uppers" value="${session.label}" onchange="updateCalSessionLabel('${activeDayKey}',${si},this.value)"><button class="session-delete-btn" onclick="deleteCalSession('${activeDayKey}',${si})">Remove</button></div>`;
-
-        // ── SUPERSET FIX: group by session, pass si correctly ──
         const groups=groupBuilderExercises(session.exercises);
         groups.forEach(group=>{
           if(group.type==='superset'){
             html+=`<div class="superset-group"><div class="superset-label">Superset ${group.label}</div>`;
             group.indices.forEach((ei,pos)=>{
-              const ex=session.exercises[ei];
-              const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
+              const ex=session.exercises[ei];const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
               html+=`<div class="session-exercise-row"><div style="flex:1"><span class="se-superset-badge">${group.label}${pos+1}</span><span class="se-name">${exData.name}</span><div class="se-prescription" style="margin-top:2px">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;gap:4px;align-items:center"><button onclick="unlinkSuperset('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#666;font-size:11px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button></div></div>`;
             });
             html+=`</div>`;
           } else {
-            const ei=group.index;
-            const ex=session.exercises[ei];
-            const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
-            // Only show Link superset if there are other non-grouped exercises to link to
+            const ei=group.index;const ex=session.exercises[ei];const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
             const otherAvailable=session.exercises.some((e,idx)=>idx!==ei&&!e.supersetGroup);
             html+=`<div class="session-exercise-row"><div style="flex:1"><div class="se-name">${exData.name}</div><div class="se-prescription">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>${otherAvailable?`<button class="link-superset-btn" onclick="openSupersetPicker('${activeDayKey}',${si},${ei})">Link superset</button>`:''}</div></div>`;
           }
         });
-
         html+=`<button class="add-exercise-btn" onclick="openExercisePicker('${activeDayKey}',${si})">+ Add Exercise</button></div>`;
       });
     }
@@ -1041,22 +1140,18 @@
     const groups=[],processed=new Set();
     exercises.forEach((ex,i)=>{
       if(processed.has(i))return;
-      if(ex.supersetGroup){
-        const indices=exercises.map((e,idx)=>e.supersetGroup===ex.supersetGroup?idx:-1).filter(idx=>idx>-1);
-        indices.forEach(idx=>processed.add(idx));
-        groups.push({type:'superset',label:ex.supersetGroup,indices});
-      } else {processed.add(i);groups.push({type:'standalone',index:i});}
+      if(ex.supersetGroup){const indices=exercises.map((e,idx)=>e.supersetGroup===ex.supersetGroup?idx:-1).filter(idx=>idx>-1);indices.forEach(idx=>processed.add(idx));groups.push({type:'superset',label:ex.supersetGroup,indices});}
+      else{processed.add(i);groups.push({type:'standalone',index:i});}
     });
     return groups;
   }
 
-  // ── SUPERSET FUNCTIONS — si passed correctly throughout ──
   function openSupersetPicker(dk,si,ei){
     const day=getDayData(dk);if(!day)return;
     const session=day.sessions[si];
     const others=session.exercises.map((e,idx)=>({e,idx})).filter(({e,idx})=>idx!==ei&&!e.supersetGroup);
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
-    box.innerHTML=`<div class="modal-title">Link as Superset</div><div style="font-size:13px;color:#888;margin-bottom:16px">Choose an exercise to pair with this one</div>${others.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No available exercises to link — all others are already in a superset.</div>':others.map(({e,idx})=>{const exData=getData('tt_exercises').find(ex=>ex.id===e.exId);if(!exData)return '';return `<div class="picker-exercise-row" onclick="linkSuperset('${dk}',${si},${ei},${idx});document.getElementById('exercise-modal').style.display='none'"><div><div class="picker-ex-name">${exData.name}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`;}).join('')}<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;
+    box.innerHTML=`<div class="modal-title">Link as Superset</div><div style="font-size:13px;color:#888;margin-bottom:16px">Choose an exercise to pair with this one</div>${others.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No available exercises to link.</div>':others.map(({e,idx})=>{const exData=getData('tt_exercises').find(ex=>ex.id===e.exId);if(!exData)return '';return `<div class="picker-exercise-row" onclick="linkSuperset('${dk}',${si},${ei},${idx});document.getElementById('exercise-modal').style.display='none'"><div><div class="picker-ex-name">${exData.name}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`;}).join('')}<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;
     modal.style.display='flex';
   }
 
@@ -1065,18 +1160,15 @@
     const session=day.sessions[si];
     const used=new Set(session.exercises.map(e=>e.supersetGroup).filter(Boolean));
     let letter='A';while(used.has(letter))letter=String.fromCharCode(letter.charCodeAt(0)+1);
-    session.exercises[ei1].supersetGroup=letter;
-    session.exercises[ei2].supersetGroup=letter;
+    session.exercises[ei1].supersetGroup=letter;session.exercises[ei2].supersetGroup=letter;
     renderDayBody();
   }
 
   function unlinkSuperset(dk,si,ei){
     const day=getDayData(dk);if(!day)return;
-    const session=day.sessions[si];
-    const group=session.exercises[ei].supersetGroup;
+    const session=day.sessions[si];const group=session.exercises[ei].supersetGroup;
     const members=session.exercises.filter(e=>e.supersetGroup===group);
-    if(members.length<=2)members.forEach(e=>delete e.supersetGroup);
-    else delete session.exercises[ei].supersetGroup;
+    if(members.length<=2)members.forEach(e=>delete e.supersetGroup);else delete session.exercises[ei].supersetGroup;
     renderDayBody();
   }
 
@@ -1189,9 +1281,7 @@
     showDesignerSection('programs',document.querySelectorAll('#designer .sub-btn')[1]);renderProgramsList();
   }
 
-  // ══════════════════════════════════════
   // ── SURFING THROUGH LIFE ──
-  // ══════════════════════════════════════
   function showStlSection(section,btn){
     ['surfing','mobility','reading','mindfulness','sports'].forEach(s=>document.getElementById('stl-'+s).style.display='none');
     document.querySelectorAll('#stl .sub-btn').forEach(b=>b.classList.remove('active'));
@@ -1204,7 +1294,6 @@
     if(section==='sports')renderStlSports();
   }
 
-  // ── SURFING ──
   let stlSurfView='list',stlSurfDetailId=null;
   function renderStlSurfing(){
     const body=document.getElementById('stl-surf-body');
@@ -1230,7 +1319,6 @@
     saveData('tt_surfs',surfs);stlSurfView='list';renderStlSurfing();renderSurfStats();renderLifeCalendar();
   }
 
-  // ── MOBILITY ──
   let stlMobView='list',stlMobDetailId=null,mobSessionExercises=[];
   function renderStlMobility(){
     const body=document.getElementById('stl-mob-body');
@@ -1268,7 +1356,6 @@
     saveData('tt_mobility',sessions);stlMobView='list';renderStlMobility();renderLifeCalendar();
   }
 
-  // ── READING ──
   let stlReadView='list',stlReadBookId=null;
   function renderStlReading(){
     const body=document.getElementById('stl-read-body');
@@ -1290,7 +1377,6 @@
   function openFinishBook(id){stlReadBookId=id;stlReadView='finish';renderStlReading();}
   function finishBook(id){const books=getData('tt_books');const b=books.find(b=>b.id===id);if(!b)return;b.finished=true;b.summary=document.getElementById('finish-summary').value.trim();b.learnings=document.getElementById('finish-learnings').value.trim();saveData('tt_books',books);stlReadView='detail';renderStlReading();}
 
-  // ── MINDFULNESS ──
   let stlMindView='list';
   function renderStlMindfulness(){
     const body=document.getElementById('stl-mind-body');
@@ -1306,19 +1392,14 @@
     saveData('tt_mindfulness',sessions);stlMindView='list';renderStlMindfulness();renderLifeCalendar();
   }
 
-  // ── SPORTS ──
   let stlSportsView='list';
   function renderStlSports(){
     const body=document.getElementById('stl-sports-body');
     const sports=[...getData('tt_sports')].sort((a,b)=>new Date(b.date)-new Date(a.date));
     const now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
     const mc=sports.filter(s=>{const d=new Date(s.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).length;
-
-    // Count by sport name for stats
-    const sportCounts={};
-    sports.forEach(s=>{sportCounts[s.sport]=(sportCounts[s.sport]||0)+1;});
+    const sportCounts={};sports.forEach(s=>{sportCounts[s.sport]=(sportCounts[s.sport]||0)+1;});
     const topSport=Object.entries(sportCounts).sort((a,b)=>b[1]-a[1])[0];
-
     if(stlSportsView==='add'){
       body.innerHTML=`<button class="detail-back-btn" onclick="stlSportsView='list';renderStlSports()">← Cancel</button>
         <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log a Sport</div>
@@ -1331,7 +1412,6 @@
         <button class="btn" style="margin-top:16px" onclick="saveStlSport()">Save</button>`;
       return;
     }
-
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px">
       <div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sports.length}</div></div>
       <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div>
@@ -1339,37 +1419,19 @@
     </div>
     <button class="btn" onclick="stlSportsView='add';renderStlSports()">+ Log a Sport</button>
     <div class="section-title" style="margin-top:20px">Sports Log</div>
-    ${sports.length===0?'<div class="empty-state"><p>No sports logged yet.</p></div>':
-      sports.map(s=>`<div class="entry-list-item" style="cursor:default">
-        <div>
-          <div class="entry-title">${s.sport}</div>
-          <div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})}${s.notes?' &middot; '+s.notes:''}</div>
-        </div>
-        <button onclick="deleteStlEntry('tt_sports','${s.id}',()=>{renderStlSports();renderLifeCalendar();})" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button>
-      </div>`).join('')}`;
+    ${sports.length===0?'<div class="empty-state"><p>No sports logged yet.</p></div>':sports.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-title">${s.sport}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})}${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlEntry('tt_sports','${s.id}',()=>{renderStlSports();renderLifeCalendar();})" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
   }
-
   function saveStlSport(){
-    const sport=document.getElementById('sport-name').value.trim();
-    if(!sport){alert('Please enter a sport name');return;}
+    const sport=document.getElementById('sport-name').value.trim();if(!sport){alert('Please enter a sport name');return;}
     const sports=getData('tt_sports');
-    sports.push({
-      id:'SPORT'+String(sports.length+1).padStart(3,'0'),
-      sport,
-      date:document.getElementById('sport-date').value,
-      notes:document.getElementById('sport-notes').value.trim()
-    });
-    saveData('tt_sports',sports);
-    stlSportsView='list';
-    renderStlSports();
-    renderLifeCalendar();
+    sports.push({id:'SPORT'+String(sports.length+1).padStart(3,'0'),sport,date:document.getElementById('sport-date').value,notes:document.getElementById('sport-notes').value.trim()});
+    saveData('tt_sports',sports);stlSportsView='list';renderStlSports();renderLifeCalendar();
   }
 
   function deleteStlEntry(key,id,callback){if(!confirm('Delete this entry?'))return;saveData(key,getData(key).filter(i=>i.id!==id));if(callback)callback();}
 
   // ── INIT ──
-  function init(){
-    // Version check — wipes old demo data, keeps exercises
+  function initApp(){
     if(!getItem('tt_app_version')||getItem('tt_app_version')<'3'){
       ['tt_workouts','tt_surfs','tt_programs','tt_prs','tt_mobility','tt_books',
        'tt_mindfulness','tt_sports','tt_completed_sessions','tt_completed_workouts',
@@ -1390,8 +1452,6 @@
     renderLifeCalendar();
     renderExerciseBank();
   }
-
-  init();
   </script>
 </body>
 </html>
