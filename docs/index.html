@@ -10,7 +10,6 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a1a; color: #fff; min-height: 100vh; padding-bottom: 40px; }
 
-    /* ── PIN SCREEN ── */
     .pin-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
     .pin-logo { font-size: 36px; font-weight: 700; letter-spacing: -1px; color: #fff; margin-bottom: 8px; }
     .pin-tagline { font-size: 14px; color: #666; margin-bottom: 48px; }
@@ -25,6 +24,7 @@
     .pin-key.delete { font-size: 18px; color: #888; }
     .pin-key.empty { background: transparent; cursor: default; }
     .pin-error-msg { font-size: 13px; color: #FF5050; margin-top: 16px; height: 20px; text-align: center; }
+    .pin-status { font-size: 12px; color: #555; margin-top: 12px; }
 
     .header { background: #1a1a1a; padding: 60px 20px 20px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
     .header-left { flex-shrink: 0; }
@@ -299,6 +299,11 @@
     .mob-ex-name { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 8px; }
     .mob-fields { display: flex; gap: 8px; align-items: flex-end; }
     .mob-fields .field-input { padding: 8px 10px; font-size: 13px; }
+
+    .sync-indicator { position: fixed; bottom: 20px; right: 20px; background: #2a2a2a; border-radius: 20px; padding: 8px 14px; font-size: 12px; color: #666; display: none; z-index: 50; }
+    .sync-indicator.saving { display: block; color: #FFAA32; }
+    .sync-indicator.saved { display: block; color: #50C878; }
+    .sync-indicator.error { display: block; color: #FF5050; }
   </style>
 </head>
 <body>
@@ -331,11 +336,11 @@
       <button class="pin-key delete" onclick="pinDelete()">⌫</button>
     </div>
     <div class="pin-error-msg" id="pin-error"></div>
+    <div class="pin-status" id="pin-status"></div>
   </div>
 
-  <!-- MAIN APP (hidden until PIN unlocked) -->
+  <!-- MAIN APP -->
   <div id="app" style="display:none">
-
     <div class="header">
       <div class="header-left">
         <h1>TRACK<span style="color:#4A9EFF">THAT</span></h1>
@@ -361,7 +366,6 @@
       <button onclick="showPage('history',this)">Exercise History</button>
     </nav>
 
-    <!-- HOME -->
     <div id="home" class="page active">
       <div class="section-title">Training Stats</div>
       <div class="stat-grid">
@@ -444,96 +448,329 @@
     </div>
 
     <div id="history" class="page"><div id="history-body"></div></div>
+  </div>
 
-  </div><!-- end #app -->
-
-  <!-- MODAL -->
   <div id="exercise-modal" class="modal-overlay" style="display:none">
     <div class="modal-box" id="exercise-modal-box"></div>
   </div>
 
+  <div class="sync-indicator" id="sync-indicator"></div>
+
   <script>
+  // ══════════════════════════════════════
+  // ── SUPABASE CONFIG ──
+  // ══════════════════════════════════════
+  const SUPABASE_URL = 'https://oghklpapxofkljxupjix.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9naGtscGFweG9ma2xqeHVwaml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMDQyMzQsImV4cCI6MjA5Mzg4MDIzNH0.VETDD2BpVHAKJtAQaXmrSYFXOtTI-6NKZcHkAJebO0I';
+
+  async function sbGet(table) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+      });
+      return await res.json();
+    } catch(e) { console.error('sbGet error', table, e); return []; }
+  }
+
+  async function sbUpsert(table, data) {
+    showSync('saving');
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(data)
+      });
+      showSync('saved');
+      return res.ok;
+    } catch(e) { showSync('error'); console.error('sbUpsert error', table, e); return false; }
+  }
+
+  async function sbDelete(table, id) {
+    showSync('saving');
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+      });
+      showSync('saved');
+      return res.ok;
+    } catch(e) { showSync('error'); return false; }
+  }
+
+  function showSync(state) {
+    const el = document.getElementById('sync-indicator');
+    el.className = 'sync-indicator ' + state;
+    el.textContent = state === 'saving' ? '⏳ Saving...' : state === 'saved' ? '✓ Saved' : '⚠ Save failed';
+    if(state !== 'saving') setTimeout(() => el.className = 'sync-indicator', 2000);
+  }
+
+  // ── IN-MEMORY CACHE (loaded from Supabase on login) ──
+  let DB = {
+    workouts: [], programs: [], surfs: [], prs: [],
+    mobility: [], books: [], mindfulness: [], sports: [],
+    completed_sessions: [], completed_workouts: [], exercises: [],
+    settings: {}
+  };
+
+  async function loadAllData() {
+    document.getElementById('pin-status').textContent = 'Loading your data...';
+    const [workouts, programs, surfs, prs, mobility, books, mindfulness, sports,
+           completed_sessions, completed_workouts] = await Promise.all([
+      sbGet('workouts'), sbGet('programs'), sbGet('surfs'), sbGet('prs'),
+      sbGet('mobility'), sbGet('books'), sbGet('mindfulness'), sbGet('sports'),
+      sbGet('completed_sessions'), sbGet('completed_workouts')
+    ]);
+
+    DB.workouts = workouts || [];
+    DB.programs = (programs || []).map(p => ({...p.data, id: p.id}));
+    DB.surfs = surfs || [];
+    DB.prs = prs || [];
+    DB.mobility = (mobility || []).map(m => ({...m.data, id: m.id}));
+    DB.books = (books || []).map(b => ({...b.data, id: b.id}));
+    DB.mindfulness = mindfulness || [];
+    DB.sports = sports || [];
+    DB.completed_sessions = completed_sessions || [];
+    DB.completed_workouts = completed_workouts || [];
+
+    // Exercises live in localStorage only (static reference data)
+    DB.exercises = JSON.parse(localStorage.getItem('tt_exercises') || '[]');
+    if(DB.exercises.length === 0) seedExercises();
+
+    // Settings
+    const settingsRows = await sbGet('app_settings');
+    DB.settings = {};
+    (settingsRows || []).forEach(r => DB.settings[r.key] = r.value);
+    if(!DB.settings.start_date) {
+      const today = todayStr();
+      await sbUpsert('app_settings', {key: 'start_date', value: today});
+      DB.settings.start_date = today;
+    }
+
+    document.getElementById('pin-status').textContent = '';
+  }
+
+  // ── DATA ACCESS HELPERS (replaces localStorage getData/saveData) ──
+  function getWorkouts() { return DB.workouts; }
+  function getSurfs() { return DB.surfs; }
+  function getPrograms() { return DB.programs; }
+  function getPRs() { return DB.prs; }
+  function getMobility() { return DB.mobility; }
+  function getBooks() { return DB.books; }
+  function getMindfulness() { return DB.mindfulness; }
+  function getSports() { return DB.sports; }
+  function getCompletedSessions() { return DB.completed_sessions; }
+  function getCompletedWorkouts() { return DB.completed_workouts; }
+  function getExercises() { return DB.exercises; }
+  function getStartDate() { return DB.settings.start_date || todayStr(); }
+  function getBestStreak() { return parseInt(DB.settings.best_streak || '0'); }
+
+  async function saveBestStreak(val) {
+    DB.settings.best_streak = String(val);
+    await sbUpsert('app_settings', {key: 'best_streak', value: String(val)});
+  }
+
+  // ── SAVE FUNCTIONS ──
+  async function saveWorkout(w) {
+    DB.workouts.push(w);
+    await sbUpsert('workouts', {id: w.id, date: w.date, type: w.type, name: w.name, total_kg: w.totalKg||0, exercises: w.exercises||[]});
+  }
+
+  async function deleteSurf(id) {
+    DB.surfs = DB.surfs.filter(s => s.id !== id);
+    await sbDelete('surfs', id);
+  }
+
+  async function saveSurf(s) {
+    DB.surfs.push(s);
+    await sbUpsert('surfs', {id: s.id, date: s.date, location: s.location, duration: s.duration||0, swell_comments: s.swellComments||'', comments: s.comments||''});
+  }
+
+  async function saveProgram(p) {
+    const idx = DB.programs.findIndex(x => x.id === p.id);
+    if(idx > -1) DB.programs[idx] = p; else DB.programs.push(p);
+    await sbUpsert('programs', {id: p.id, data: p});
+  }
+
+  async function deleteProgram(id) {
+    DB.programs = DB.programs.filter(p => p.id !== id);
+    await fetch(`${SUPABASE_URL}/rest/v1/programs?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+  }
+
+  async function savePR(exercise, weight, date) {
+    const existing = DB.prs.find(p => p.exercise === exercise);
+    if(existing) existing.weight = weight;
+    else DB.prs.push({exercise, weight, date});
+    await sbUpsert('prs', {exercise, weight, date});
+  }
+
+  async function saveMobility(m) {
+    DB.mobility.push(m);
+    await sbUpsert('mobility', {id: m.id, data: m});
+  }
+
+  async function deleteMobility(id) {
+    DB.mobility = DB.mobility.filter(m => m.id !== id);
+    await fetch(`${SUPABASE_URL}/rest/v1/mobility?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+  }
+
+  async function saveBook(b) {
+    const idx = DB.books.findIndex(x => x.id === b.id);
+    if(idx > -1) DB.books[idx] = b; else DB.books.push(b);
+    await sbUpsert('books', {id: b.id, data: b});
+  }
+
+  async function deleteBook(id) {
+    DB.books = DB.books.filter(b => b.id !== id);
+    await fetch(`${SUPABASE_URL}/rest/v1/books?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+  }
+
+  async function saveMindfulness(m) {
+    DB.mindfulness.push(m);
+    await sbUpsert('mindfulness', {id: m.id, date: m.date, type: m.type, duration: m.duration, notes: m.notes||''});
+  }
+
+  async function deleteMindfulness(id) {
+    DB.mindfulness = DB.mindfulness.filter(m => m.id !== id);
+    await fetch(`${SUPABASE_URL}/rest/v1/mindfulness?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+  }
+
+  async function saveSport(s) {
+    DB.sports.push(s);
+    await sbUpsert('sports', {id: s.id, sport: s.sport, date: s.date, notes: s.notes||''});
+  }
+
+  async function deleteSport(id) {
+    DB.sports = DB.sports.filter(s => s.id !== id);
+    await fetch(`${SUPABASE_URL}/rest/v1/sports?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+  }
+
+  async function saveCompletedSession(cs) {
+    DB.completed_sessions.push(cs);
+    await sbUpsert('completed_sessions', {program_id: cs.programId, date_key: cs.dateKey, session_idx: cs.sessionIdx, completed_at: cs.completedAt});
+  }
+
+  async function saveCompletedWorkout(cw) {
+    DB.completed_workouts.push(cw);
+    await sbUpsert('completed_workouts', {ex_id: cw.exId, exercise_name: cw.exerciseName, date: cw.date, sets: cw.sets, reps: cw.reps, max_val: cw.maxVal});
+  }
+
+  // Map Supabase snake_case back to camelCase for completed_sessions
+  function getCompletedSessionsNorm() {
+    return DB.completed_sessions.map(c => ({
+      programId: c.program_id || c.programId,
+      dateKey: c.date_key || c.dateKey,
+      sessionIdx: c.session_idx !== undefined ? c.session_idx : c.sessionIdx
+    }));
+  }
+
+  function getCompletedWorkoutsNorm() {
+    return DB.completed_workouts.map(c => ({
+      exId: c.ex_id || c.exId,
+      exerciseName: c.exercise_name || c.exerciseName,
+      date: c.date,
+      sets: c.sets,
+      reps: c.reps,
+      maxVal: c.max_val !== undefined ? c.max_val : c.maxVal
+    }));
+  }
+
+  // Exercises stay in localStorage
+  function saveExercises(exs) {
+    DB.exercises = exs;
+    localStorage.setItem('tt_exercises', JSON.stringify(exs));
+  }
+
   // ══════════════════════════════════════
   // ── PIN SYSTEM ──
   // ══════════════════════════════════════
   const CORRECT_PIN = '101215';
-  const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours in ms
+  const SESSION_DURATION = 8 * 60 * 60 * 1000;
   let pinEntry = '';
 
-  function checkPinSession(){
+  async function checkPinSession() {
     const unlocked = localStorage.getItem('tt_pin_unlocked');
-    const unlockedAt = parseInt(localStorage.getItem('tt_pin_time')||'0');
-    if(unlocked==='true' && Date.now()-unlockedAt < SESSION_DURATION){
+    const unlockedAt = parseInt(localStorage.getItem('tt_pin_time') || '0');
+    if(unlocked === 'true' && Date.now() - unlockedAt < SESSION_DURATION) {
+      await loadAllData();
       showApp();
     }
   }
 
-  function showApp(){
-    document.getElementById('pin-screen').style.display='none';
-    document.getElementById('app').style.display='block';
+  async function showApp() {
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
     initApp();
   }
 
-  function pinPress(digit){
+  function pinPress(digit) {
     if(pinEntry.length >= 6) return;
     pinEntry += digit;
     updatePinDots();
     if(pinEntry.length === 6) setTimeout(checkPin, 80);
   }
 
-  function pinDelete(){
+  function pinDelete() {
     if(pinEntry.length === 0) return;
-    pinEntry = pinEntry.slice(0,-1);
+    pinEntry = pinEntry.slice(0, -1);
     updatePinDots();
-    document.getElementById('pin-error').textContent='';
+    document.getElementById('pin-error').textContent = '';
   }
 
-  function updatePinDots(){
-    for(let i=0;i<6;i++){
-      const dot=document.getElementById('dot-'+i);
+  function updatePinDots() {
+    for(let i = 0; i < 6; i++) {
+      const dot = document.getElementById('dot-' + i);
       dot.classList.toggle('filled', i < pinEntry.length);
       dot.classList.remove('error');
     }
   }
 
-  function checkPin(){
-    if(pinEntry === CORRECT_PIN){
-      localStorage.setItem('tt_pin_unlocked','true');
+  async function checkPin() {
+    if(pinEntry === CORRECT_PIN) {
+      localStorage.setItem('tt_pin_unlocked', 'true');
       localStorage.setItem('tt_pin_time', Date.now().toString());
+      await loadAllData();
       showApp();
     } else {
-      // Flash red
-      for(let i=0;i<6;i++) document.getElementById('dot-'+i).classList.add('error');
-      document.getElementById('pin-error').textContent='Incorrect PIN. Try again.';
-      setTimeout(()=>{
-        pinEntry='';
-        updatePinDots();
-      },800);
+      for(let i = 0; i < 6; i++) document.getElementById('dot-' + i).classList.add('error');
+      document.getElementById('pin-error').textContent = 'Incorrect PIN. Try again.';
+      setTimeout(() => { pinEntry = ''; updatePinDots(); }, 800);
     }
   }
 
-  // Check session on load
   checkPinSession();
 
   // ══════════════════════════════════════
   // ── HELPERS ──
   // ══════════════════════════════════════
-  function getData(k){return JSON.parse(localStorage.getItem(k)||'[]');}
-  function saveData(k,v){localStorage.setItem(k,JSON.stringify(v));}
-  function getItem(k){return localStorage.getItem(k);}
-  function setItem(k,v){localStorage.setItem(k,v);}
+  function todayStr() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+  function addDays(dateStr, n) { const[y,m,d] = dateStr.split('-').map(Number); const dt = new Date(y,m-1,d); dt.setDate(dt.getDate()+n); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+  function dayOfWeek(dateStr) { const[y,m,d] = dateStr.split('-').map(Number); return new Date(y,m-1,d).getDay(); }
+  function dateDisplay(dateStr, opts) { const[y,m,d] = dateStr.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('en-GB', opts); }
+  function diffDays(a, b) { const[ay,am,ad]=a.split('-').map(Number); const[by,bm,bd]=b.split('-').map(Number); return Math.round((new Date(by,bm-1,bd)-new Date(ay,am-1,ad))/86400000); }
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-  function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-  function addDays(dateStr,n){const[y,m,d]=dateStr.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setDate(dt.getDate()+n);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
-  function dayOfWeek(dateStr){const[y,m,d]=dateStr.split('-').map(Number);return new Date(y,m-1,d).getDay();}
-  function dateDisplay(dateStr,opts){const[y,m,d]=dateStr.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('en-GB',opts);}
-  function diffDays(a,b){const[ay,am,ad]=a.split('-').map(Number);const[by,bm,bd]=b.split('-').map(Number);return Math.round((new Date(by,bm-1,bd)-new Date(ay,am-1,ad))/86400000);}
-  const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  // ── SEED EXERCISES ──
-  function seedExercises(){
-    if(getData('tt_exercises').length>0)return;
-    saveData('tt_exercises',[
+  function seedExercises() {
+    const exs = [
       {id:'E001',name:'Bench Press',category:'Uppers',unit:'kg',bwWeighted:false,description:'Flat barbell bench press'},
       {id:'E002',name:'Overhead Press',category:'Uppers',unit:'kg',bwWeighted:false,description:'Standing barbell OHP'},
       {id:'E003',name:'Pull Up',category:'Uppers',unit:'bw',bwWeighted:true,description:'Bodyweight or weighted'},
@@ -561,87 +798,87 @@
       {id:'E025',name:'Steady Swim',category:'Swimming',unit:'duration',bwWeighted:false,description:'Continuous swim'},
       {id:'E026',name:'100m Sprints',category:'Swimming',unit:'metres',bwWeighted:false,description:'Sets x reps x distance'},
       {id:'E027',name:'Hyrox Race Sim',category:'Hyrox',unit:'hyrox',bwWeighted:false,description:'10,20,30,40,50,40,30,20,10 cals each erg'}
-    ]);
+    ];
+    saveExercises(exs);
   }
 
   // ── NAV ──
-  function showPage(pageId,btn){
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  function showPage(pageId, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
     document.getElementById(pageId).classList.add('active');
-    if(btn)btn.classList.add('active');
-    if(pageId==='designer'){seedExercises();renderExerciseBank();}
-    if(pageId==='stl')renderStlSurfing();
-    if(pageId==='active')renderActiveProgram();
-    if(pageId==='history')renderExerciseHistory();
+    if(btn) btn.classList.add('active');
+    if(pageId === 'designer') renderExerciseBank();
+    if(pageId === 'stl') renderStlSurfing();
+    if(pageId === 'active') renderActiveProgram();
+    if(pageId === 'history') renderExerciseHistory();
   }
 
-  function setHeaderDate(){document.getElementById('todays-date').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});}
+  function setHeaderDate() { document.getElementById('todays-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}); }
 
-  function drawSparkline(){
-    const workouts=getData('tt_workouts'),today=todayStr();
-    const base=[2,3,2,4,3,5,4,6,5,4,6,5,7,6];
-    const data=Array.from({length:14},(_,i)=>{
-      const key=addDays(today,-(13-i));
-      const c=workouts.filter(w=>w.date===key).length;
-      return c>0?c*3:base[i];
+  function drawSparkline() {
+    const workouts = getWorkouts(), today = todayStr();
+    const base = [2,3,2,4,3,5,4,6,5,4,6,5,7,6];
+    const data = Array.from({length:14},(_,i) => {
+      const key = addDays(today, -(13-i));
+      const c = workouts.filter(w => w.date === key).length;
+      return c > 0 ? c*3 : base[i];
     });
-    const max=Math.max(...data),min=Math.min(...data),range=max-min||1;
-    const pts=data.map((v,i)=>({x:Math.round((i/(data.length-1))*196+2),y:Math.round(56-((v-min)/range)*48)}));
-    document.getElementById('spark-line').setAttribute('points',pts.map(p=>`${p.x},${p.y}`).join(' '));
-    const g=document.getElementById('spark-dots');g.innerHTML='';
-    pts.forEach((p,i)=>{
-      const isHigh=data[i]===max;
-      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
-      c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',isHigh?'4':'2.5');
-      c.setAttribute('fill','#4A9EFF');c.setAttribute('opacity',isHigh?'1':'0.5');
+    const max = Math.max(...data), min = Math.min(...data), range = max-min||1;
+    const pts = data.map((v,i) => ({x: Math.round((i/(data.length-1))*196+2), y: Math.round(56-((v-min)/range)*48)}));
+    document.getElementById('spark-line').setAttribute('points', pts.map(p=>`${p.x},${p.y}`).join(' '));
+    const g = document.getElementById('spark-dots'); g.innerHTML = '';
+    pts.forEach((p,i) => {
+      const isHigh = data[i] === max;
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx',p.x); c.setAttribute('cy',p.y); c.setAttribute('r',isHigh?'4':'2.5');
+      c.setAttribute('fill','#4A9EFF'); c.setAttribute('opacity',isHigh?'1':'0.5');
       g.appendChild(c);
     });
   }
 
-  function renderTrainingStats(){
-    const workouts=getData('tt_workouts'),today=new Date();
-    document.getElementById('stat-total-workouts').textContent=workouts.length;
-    const totalKg=workouts.reduce((s,w)=>s+(w.totalKg||0),0);
-    document.getElementById('stat-total-kg').innerHTML=totalKg.toLocaleString()+'<span class="stat-inline-unit">kg</span>';
-    document.getElementById('stat-month-workouts').textContent=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
-    const programs=getData('tt_programs'),active=programs.find(p=>p.status==='active');
-    let missed=0;
+  function renderTrainingStats() {
+    const workouts = getWorkouts(), today = new Date();
+    document.getElementById('stat-total-workouts').textContent = workouts.length;
+    const totalKg = workouts.reduce((s,w) => s+(w.total_kg||w.totalKg||0), 0);
+    document.getElementById('stat-total-kg').innerHTML = totalKg.toLocaleString()+'<span class="stat-inline-unit">kg</span>';
+    document.getElementById('stat-month-workouts').textContent = workouts.filter(w => {const d=new Date(w.date);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
+    const programs = getPrograms(), active = programs.find(p => p.status==='active');
+    let missed = 0;
     if(active&&active.totalWorkouts&&active.totalWeeks){const spw=Math.round(active.totalWorkouts/active.totalWeeks);const wd=Math.max(0,(active.currentWeek||1)-1);missed=Math.max(0,wd*spw-(active.completedWorkouts||0));}
-    document.getElementById('stat-missed').textContent=missed;
+    document.getElementById('stat-missed').textContent = missed;
   }
 
-  function renderInsights(){
-    const workouts=getData('tt_workouts'),prs=getData('tt_prs'),today=todayStr();
-    let streak=0,best=parseInt(getItem('tt_best_streak')||'0');
+  function renderInsights() {
+    const workouts = getWorkouts(), prs = getPRs(), today = todayStr();
+    let streak = 0, best = getBestStreak();
     for(let i=0;i<365;i++){const key=addDays(today,-i);if(workouts.some(w=>w.date===key))streak++;else if(i>0)break;}
-    if(streak>best){best=streak;setItem('tt_best_streak',best);}
-    document.getElementById('insight-streak').textContent=streak+' days';
-    document.getElementById('insight-best-streak').textContent='Best: '+best+' days';
+    if(streak > best){ best = streak; saveBestStreak(best); }
+    document.getElementById('insight-streak').textContent = streak+' days';
+    document.getElementById('insight-best-streak').textContent = 'Best: '+best+' days';
     const now=new Date(),tm=now.getMonth(),ty=now.getFullYear(),lm=tm===0?11:tm-1,ly=tm===0?ty-1:ty;
-    const thisVol=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).reduce((s,w)=>s+(w.totalKg||0),0);
-    const lastVol=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===lm&&d.getFullYear()===ly;}).reduce((s,w)=>s+(w.totalKg||0),0);
+    const thisVol=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
+    const lastVol=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===lm&&d.getFullYear()===ly;}).reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
     const tEl=document.getElementById('insight-volume-trend'),tSub=document.getElementById('insight-volume-sub');
     if(lastVol===0){tEl.textContent='—';tEl.className='i-value';tSub.textContent='No data last month';}
     else{const pct=Math.round(((thisVol-lastVol)/lastVol)*100);tEl.textContent=(pct>=0?'+':'')+pct+'%';tEl.className='i-value '+(pct>=0?'positive':'negative');tSub.textContent='vs last month ('+lastVol.toLocaleString()+'kg)';}
     const sorted=[...workouts].sort((a,b)=>new Date(b.date)-new Date(a.date));
     if(sorted.length>0){const last=sorted[0];const daysAgo=diffDays(last.date,today);document.getElementById('insight-last-workout').textContent=last.name||last.type;document.getElementById('insight-last-workout-date').textContent=daysAgo===0?'Today':daysAgo===1?'Yesterday':daysAgo+' days ago';}
     if(prs.length>0){const recent=[...prs].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0))[0];document.getElementById('insight-pr-name').textContent=recent.exercise;document.getElementById('insight-pr-weight').textContent=recent.weight+'kg';}
-    const startStr=getItem('tt_start_date');
-    if(startStr){document.getElementById('insight-days-since').textContent=diffDays(startStr,today);}
-    else{setItem('tt_start_date',today);document.getElementById('insight-days-since').textContent='1';}
+    const startStr = getStartDate();
+    document.getElementById('insight-days-since').textContent = diffDays(startStr, today);
   }
 
-  function renderProgramCard(){
-    const programs=getData('tt_programs'),active=programs.find(p=>p.status==='active');
-    const el=document.getElementById('home-program-section');
+  function renderProgramCard() {
+    const programs = getPrograms(), active = programs.find(p => p.status==='active');
+    const el = document.getElementById('home-program-section');
     if(!active){el.innerHTML=`<div class="empty-state"><p>No active program.</p><button class="btn" onclick="showPage('designer',document.querySelectorAll('.nav button')[2])">Go to Program Designer</button></div>`;return;}
-    const pct=Math.round(((active.completedWorkouts||0)/active.totalWorkouts)*100);
+    const pct = Math.round(((active.completedWorkouts||0)/active.totalWorkouts)*100);
     el.innerHTML=`<div class="program-card"><div class="program-top"><div class="program-name">${active.name}</div><div class="program-week">Week ${active.currentWeek} of ${active.totalWeeks}</div></div><div class="program-focus">${active.focus}</div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%"></div></div><div class="progress-label">${active.completedWorkouts||0} of ${active.totalWorkouts} workouts completed &mdash; ${pct}%</div><button class="btn" onclick="showPage('active',document.querySelectorAll('.nav button')[1])">Jump to Next Workout</button></div>`;
   }
 
-  function renderSurfStats(){
-    const surfs=getData('tt_surfs'),now=new Date();
+  function renderSurfStats() {
+    const surfs = getSurfs(), now = new Date();
     const tm=now.getMonth(),ty=now.getFullYear(),lm=tm===0?11:tm-1;
     const ms=surfs.filter(s=>{const d=new Date(s.date);return d.getMonth()===tm&&d.getFullYear()===ty;});
     const ls=surfs.filter(s=>{const d=new Date(s.date);return d.getMonth()===lm&&d.getFullYear()===ty-(tm===0?1:0);});
@@ -661,8 +898,8 @@
     else{document.getElementById('surf-last-loc').textContent='No surfs logged yet';document.getElementById('surf-last-date').textContent='—';}
   }
 
-  function renderCalendar(){
-    const workouts=getData('tt_workouts'),now=new Date(),year=now.getFullYear(),month=now.getMonth();
+  function renderCalendar() {
+    const workouts=getWorkouts(),now=new Date(),year=now.getFullYear(),month=now.getMonth();
     const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('calendar-month-title').textContent=mn[month]+' '+year;
     const dim=new Date(year,month+1,0).getDate(),firstDay=new Date(year,month,1).getDay();
@@ -688,8 +925,8 @@
     });
   }
 
-  function renderLifeCalendar(){
-    const surfs=getData('tt_surfs'),mobility=getData('tt_mobility'),books=getData('tt_books'),mindfulness=getData('tt_mindfulness'),sports=getData('tt_sports');
+  function renderLifeCalendar() {
+    const surfs=getSurfs(),mobility=getMobility(),books=getBooks(),mindfulness=getMindfulness(),sports=getSports();
     const now=new Date(),year=now.getFullYear(),month=now.getMonth();
     const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('life-calendar-month-title').textContent=mn[month]+' '+year;
@@ -726,19 +963,19 @@
   // ══════════════════════════════════════
   // ── ACTIVE PROGRAM ──
   // ══════════════════════════════════════
-  let activeLogState=null;
+  let activeLogState = null;
 
-  function renderActiveProgram(){
+  function renderActiveProgram() {
     const body=document.getElementById('active-body');
-    const programs=getData('tt_programs'),program=programs.find(p=>p.status==='active');
+    const programs=getPrograms(),program=programs.find(p=>p.status==='active');
     if(!program){body.innerHTML=`<div class="empty-state" style="margin-top:40px"><p>No active program.</p><button class="btn" onclick="showPage('designer',document.querySelectorAll('.nav button')[2])">Go to Program Designer</button></div>`;return;}
     if(activeLogState){renderWorkoutLogger(program,activeLogState);return;}
     renderActiveProgramOverview(program,body);
   }
 
-  function renderActiveProgramOverview(program,body){
+  function renderActiveProgramOverview(program,body) {
     const today=todayStr(),startDate=program.startDate||today;
-    const completedSessions=getData('tt_completed_sessions');
+    const completedSessions=getCompletedSessionsNorm();
     const daysSinceStart=diffDays(startDate,today);
     const currentWeek=Math.max(0,Math.floor(daysSinceStart/7));
     const weekDays=Array.from({length:7},(_,i)=>addDays(startDate,currentWeek*7+i));
@@ -771,7 +1008,7 @@
       const session=dayData.sessions[nextSi];
       const isToday=nextDay===today;
       const exCount=session.exercises.length;
-      const exPreview=session.exercises.slice(0,3).map(ex=>{const e=getData('tt_exercises').find(e=>e.id===ex.exId);return e?e.name:'';}).filter(Boolean).join(', ');
+      const exPreview=session.exercises.slice(0,3).map(ex=>{const e=getExercises().find(e=>e.id===ex.exId);return e?e.name:'';}).filter(Boolean).join(', ');
       nextHtml=`<div class="section-title">Next Up</div><div class="workout-card"><div class="workout-card-title">${dayData.name}${session.label?' — '+session.label:''}</div><div class="workout-card-meta">${isToday?'Today':dateDisplay(nextDay,{weekday:'long',day:'numeric',month:'long'})} &middot; ${exCount} exercises</div><div style="font-size:12px;color:#666;margin-bottom:12px">${exPreview}${exCount>3?'...':''}</div><button class="btn" onclick="startSession('${nextDay}',${nextSi})">Start ${session.label||'Workout'}</button></div>`;
     } else {
       nextHtml=`<div class="section-title">This Week</div><div class="card"><h2>🎉 Week complete!</h2><p>All sessions done. Come back next week.</p></div>`;
@@ -793,37 +1030,33 @@
     body.innerHTML=`<div class="section-title" style="margin-top:4px">Week ${currentWeek+1} of ${program.totalWeeks} — ${program.name}</div><div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:${Math.round(((program.completedWorkouts||0)/program.totalWorkouts)*100)}%"></div></div><div class="section-title">This Week</div><div class="week-strip">${stripHtml}</div>${nextHtml}<div class="section-title">All Sessions This Week</div>${allSessionsHtml||'<div style="font-size:13px;color:#555;padding:8px 0">No sessions scheduled this week</div>'}`;
   }
 
-  function selectActiveDay(dateKey){
-    const program=getData('tt_programs').find(p=>p.status==='active');if(!program)return;
+  function selectActiveDay(dateKey) {
+    const program=getPrograms().find(p=>p.status==='active');if(!program)return;
     const dayData=program.days?.find(d=>d.dateKey===dateKey);if(!dayData)return;
-    const completedSessions=getData('tt_completed_sessions');
+    const completedSessions=getCompletedSessionsNorm();
     const firstPending=dayData.sessions.findIndex((s,si)=>s.exercises?.length>0&&!completedSessions.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si));
     if(firstPending>-1)startSession(dateKey,firstPending);
   }
 
-  let logData={};
+  let logData = {};
   function startSession(dateKey,sessionIdx){logData={};activeLogState={dateKey,sessionIdx};renderActiveProgram();}
 
-  function renderWorkoutLogger(program,state){
+  function renderWorkoutLogger(program,state) {
     const body=document.getElementById('active-body');
     const dayData=program.days?.find(d=>d.dateKey===state.dateKey);
     if(!dayData){activeLogState=null;renderActiveProgram();return;}
     const session=dayData.sessions[state.sessionIdx];
     if(!session){activeLogState=null;renderActiveProgram();return;}
-    const prevWorkouts=getData('tt_completed_workouts');
+    const prevWorkouts=getCompletedWorkoutsNorm();
     const sessionLabel=session.label||'Session '+(state.sessionIdx+1);
-
     let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><button class="btn-outline" style="padding:8px 14px;font-size:13px;flex:none" onclick="activeLogState=null;renderActiveProgram()">← Back</button><div style="font-size:13px;color:#888">${dateDisplay(state.dateKey,{weekday:'long',day:'numeric',month:'long'})}</div></div><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">${dayData.name}</div><div style="font-size:14px;color:#4A9EFF;margin-bottom:4px">${sessionLabel}</div><div style="font-size:13px;color:#888;margin-bottom:20px">${program.name} &middot; Week ${program.currentWeek||1}</div>`;
-
     const groups=groupExercisesForLog(session.exercises);
     groups.forEach(group=>{
       if(group.type==='superset'){
         html+=`<div class="log-superset-group"><div class="log-superset-label">Superset ${group.label}</div>`;
         group.exercises.forEach(({ex,exIdx})=>{html+=renderLogExCard(ex,state.sessionIdx,exIdx,prevWorkouts);});
         html+=`</div>`;
-      } else {
-        html+=renderLogExCard(group.ex,state.sessionIdx,group.exIdx,prevWorkouts);
-      }
+      } else {html+=renderLogExCard(group.ex,state.sessionIdx,group.exIdx,prevWorkouts);}
     });
     html+=`<button class="btn" style="margin-top:24px" onclick="finishSession('${program.id}','${state.dateKey}',${state.sessionIdx})">Finish ${sessionLabel}</button>`;
     body.innerHTML=html;
@@ -833,17 +1066,14 @@
     const groups=[],processed=new Set();
     exercises.forEach((ex,i)=>{
       if(processed.has(i))return;
-      if(ex.supersetGroup){
-        const groupExs=exercises.map((e,idx)=>({ex:e,exIdx:idx})).filter(({ex:e})=>e.supersetGroup===ex.supersetGroup);
-        groupExs.forEach(({exIdx})=>processed.add(exIdx));
-        groups.push({type:'superset',label:ex.supersetGroup,exercises:groupExs});
-      } else {processed.add(i);groups.push({type:'standalone',ex,exIdx:i});}
+      if(ex.supersetGroup){const groupExs=exercises.map((e,idx)=>({ex:e,exIdx:idx})).filter(({ex:e})=>e.supersetGroup===ex.supersetGroup);groupExs.forEach(({exIdx})=>processed.add(exIdx));groups.push({type:'superset',label:ex.supersetGroup,exercises:groupExs});}
+      else{processed.add(i);groups.push({type:'standalone',ex,exIdx:i});}
     });
     return groups;
   }
 
   function renderLogExCard(ex,sessionIdx,exIdx,prevWorkouts){
-    const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return '';
+    const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return '';
     const unit=exData.unit,sets=ex.sets||1;
     const prevBest=getPrevBest(ex.exId,ex.reps,prevWorkouts);
     let setsHtml='';
@@ -870,37 +1100,36 @@
 
   function checkPRInput(input,exName,val){
     if(!val||isNaN(val)){input.classList.remove('pr');return;}
-    const prs=getData('tt_prs'),existing=prs.find(p=>p.exercise===exName);
+    const prs=getPRs(),existing=prs.find(p=>p.exercise===exName);
     if(existing&&val>existing.weight)input.classList.add('pr');else input.classList.remove('pr');
   }
 
-  function finishSession(programId,dateKey,sessionIdx){
-    const programs=getData('tt_programs'),program=programs.find(p=>p.id===programId);if(!program)return;
+  async function finishSession(programId,dateKey,sessionIdx){
+    const programs=getPrograms(),program=programs.find(p=>p.id===programId);if(!program)return;
     const dayData=program.days?.find(d=>d.dateKey===dateKey);
     const session=dayData?.sessions[sessionIdx];if(!session)return;
-    const completedSessions=getData('tt_completed_sessions');
+    const completedSessions=getCompletedSessionsNorm();
     if(!completedSessions.some(c=>c.programId===programId&&c.dateKey===dateKey&&c.sessionIdx===sessionIdx)){
-      completedSessions.push({programId,dateKey,sessionIdx,completedAt:new Date().toISOString()});
-      saveData('tt_completed_sessions',completedSessions);
+      await saveCompletedSession({programId,dateKey,sessionIdx,completedAt:new Date().toISOString()});
     }
-    const prs=getData('tt_prs'),prevWorkouts=getData('tt_completed_workouts');
     const newPRs=[];let totalKg=0;
-    session.exercises.forEach((ex,ei)=>{
-      const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
+    for(const [ei,ex] of session.exercises.entries()){
+      const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)continue;
       const sets=ex.sets||1;const setValues=[];
       for(let s=0;s<sets;s++){const key=`${sessionIdx}_${ei}_${s}`;const val=parseFloat(logData[key]);if(!isNaN(val)){setValues.push(val);if(exData.unit==='kg')totalKg+=val*(ex.reps||1);}}
       if(setValues.length>0){
         const maxVal=Math.max(...setValues);
-        prevWorkouts.push({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:setValues,reps:ex.reps||null,maxVal});
-        const existing=prs.find(p=>p.exercise===exData.name);
-        if(!existing||maxVal>existing.weight){if(existing)existing.weight=maxVal;else prs.push({exercise:exData.name,weight:maxVal,date:dateKey});newPRs.push({name:exData.name,val:maxVal,unit:exData.unit==='kg'?'kg':exData.unit==='metres'?'m':''});}
+        await saveCompletedWorkout({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:setValues,reps:ex.reps||null,maxVal});
+        const existing=getPRs().find(p=>p.exercise===exData.name);
+        if(!existing||maxVal>existing.weight){
+          await savePR(exData.name,maxVal,dateKey);
+          newPRs.push({name:exData.name,val:maxVal,unit:exData.unit==='kg'?'kg':exData.unit==='metres'?'m':''});
+        }
       }
-    });
-    saveData('tt_completed_workouts',prevWorkouts);saveData('tt_prs',prs);
-    program.completedWorkouts=(program.completedWorkouts||0)+1;saveData('tt_programs',programs);
-    const workouts=getData('tt_workouts');
-    workouts.push({id:'W'+Date.now(),date:dateKey,type:'gym',totalKg,name:(dayData?.name||'Workout')+(session.label?' — '+session.label:''),exercises:[]});
-    saveData('tt_workouts',workouts);
+    }
+    program.completedWorkouts=(program.completedWorkouts||0)+1;
+    await saveProgram(program);
+    await saveWorkout({id:'W'+Date.now(),date:dateKey,type:'gym',totalKg,name:(dayData?.name||'Workout')+(session.label?' — '+session.label:''),exercises:[]});
     activeLogState=null;renderProgramCard();renderTrainingStats();
     showSessionSummary(newPRs,totalKg,session,dayData);
   }
@@ -916,7 +1145,7 @@
   function renderExerciseHistory(){
     const body=document.getElementById('history-body');
     if(historyView==='detail'&&historyExId){renderExerciseDetail(body);return;}
-    const exercises=getData('tt_exercises'),completedWorkouts=getData('tt_completed_workouts');
+    const exercises=getExercises(),completedWorkouts=getCompletedWorkoutsNorm();
     const CATS=['Uppers','Lowers','Core','OLY','Plyo','Running','Swimming','Hyrox'];
     let html='<div class="section-title" style="margin-top:4px">Browse by category</div>';
     CATS.forEach(cat=>{
@@ -930,9 +1159,9 @@
   function toggleHistoryCat(id){const el=document.getElementById(id),chev=document.getElementById('chev-'+id);const isOpen=el.classList.contains('open');el.classList.toggle('open',!isOpen);chev.textContent=isOpen?'▼':'▲';}
 
   function renderExerciseDetail(body){
-    const exercises=getData('tt_exercises'),ex=exercises.find(e=>e.id===historyExId);
+    const exercises=getExercises(),ex=exercises.find(e=>e.id===historyExId);
     if(!ex){historyView='list';renderExerciseHistory();return;}
-    const completedWorkouts=getData('tt_completed_workouts').filter(w=>w.exId===historyExId);
+    const completedWorkouts=getCompletedWorkoutsNorm().filter(w=>w.exId===historyExId);
     const unit=ex.unit==='kg'?'kg':ex.unit==='metres'?'m':'';
     const repGroups={};
     completedWorkouts.forEach(w=>{const reps=w.reps||'unknown';if(!repGroups[reps])repGroups[reps]=[];repGroups[reps].push(w);});
@@ -976,25 +1205,22 @@
   }
 
   function renderExerciseBank(){
-    const exercises=getData('tt_exercises'),container=document.getElementById('bank-category-list');
+    const exercises=getExercises(),container=document.getElementById('bank-category-list');
     container.innerHTML='';
     ALL_CATEGORIES.forEach(cat=>{
       const catEx=exercises.filter(e=>e.category===cat).sort((a,b)=>a.name.localeCompare(b.name));
       const block=document.createElement('div');block.className='category-block';
-      block.innerHTML=`<div class="category-header" onclick="toggleCategory('cat-${cat}',this)"><div style="display:flex;align-items:center;gap:10px"><h3>${cat}</h3><span class="cat-count">${catEx.length} exercises</span></div><span class="category-chevron" id="chev-cat-${cat}">▼</span></div><div class="category-exercises" id="cat-${cat}">${catEx.length===0?`<div style="padding:12px 14px;color:#555;font-size:13px">No exercises yet</div>`:catEx.map(e=>`<div class="exercise-row"><div><div class="ex-name">${e.name}</div><div class="ex-meta">${unitLabel(e.unit,e.bwWeighted)}</div></div><div class="ex-btn-group"><button class="ex-edit-btn" onclick="openAddExercise('${e.id}')">Edit</button><button class="ex-delete-btn" onclick="deleteExercise('${e.id}')">Delete</button></div></div>`).join('')}</div>`;
+      block.innerHTML=`<div class="category-header" onclick="toggleCategory('cat-${cat}',this)"><div style="display:flex;align-items:center;gap:10px"><h3>${cat}</h3><span class="cat-count">${catEx.length} exercises</span></div><span class="category-chevron" id="chev-cat-${cat}">▼</span></div><div class="category-exercises" id="cat-${cat}">${catEx.length===0?`<div style="padding:12px 14px;color:#555;font-size:13px">No exercises yet</div>`:catEx.map(e=>`<div class="exercise-row"><div><div class="ex-name">${e.name}</div><div class="ex-meta">${unitLabel(e.unit,e.bwWeighted)}</div></div><div class="ex-btn-group"><button class="ex-edit-btn" onclick="openAddExercise('${e.id}')">Edit</button><button class="ex-delete-btn" onclick="deleteExerciseFromBank('${e.id}')">Delete</button></div></div>`).join('')}</div>`;
       container.appendChild(block);
     });
   }
 
-  function deleteExercise(id){
-    const programs=getData('tt_programs');
+  function deleteExerciseFromBank(id){
+    const programs=getPrograms();
     const activeProgram=programs.find(p=>p.status==='active');
-    if(activeProgram){
-      const inUse=activeProgram.days?.some(day=>day.sessions?.some(session=>session.exercises?.some(ex=>ex.exId===id)));
-      if(inUse){alert('This exercise is used in your active program. Remove it from the program first before deleting.');return;}
-    }
-    if(!confirm('Delete this exercise from the bank?'))return;
-    saveData('tt_exercises',getData('tt_exercises').filter(e=>e.id!==id));
+    if(activeProgram){const inUse=activeProgram.days?.some(day=>day.sessions?.some(session=>session.exercises?.some(ex=>ex.exId===id)));if(inUse){alert('This exercise is used in your active program. Remove it from the program first.');return;}}
+    if(!confirm('Delete this exercise?'))return;
+    saveExercises(getExercises().filter(e=>e.id!==id));
     renderExerciseBank();
   }
 
@@ -1012,7 +1238,7 @@
     editingExerciseId=id;
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
     box.innerHTML=`<div class="modal-title">${id?'Edit Exercise':'Add Exercise'}</div><div class="field-label">Exercise Name</div><input class="field-input" id="ex-name" type="text" placeholder="e.g. Bench Press"><div class="field-label">Category</div><select class="field-input" id="ex-category">${ALL_CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('')}</select><div class="field-label">Recording Format</div><select class="field-input" id="ex-unit" onchange="updateUnitPreview()"><option value="kg">Sets × Reps × Weight (kg)</option><option value="bw">Sets × Reps — Bodyweight</option><option value="metres">Sets × Reps × Distance (metres)</option><option value="reptime">Sets × Reps × Time per rep</option><option value="duration">Duration only</option><option value="hyrox">Hyrox — descriptive + finish time</option></select><div class="unit-preview" id="unit-preview">In the program: 4×6. When logging: each set records kg.</div><div id="bw-toggle-row" style="display:none"><div class="field-label">Bodyweight Options</div><div class="toggle-row"><div><label style="color:#fff">Allow added weight</label><div style="font-size:12px;color:#666;margin-top:2px">e.g. weighted pull ups</div></div><label class="toggle-switch"><input type="checkbox" id="ex-bw-weighted"><span class="toggle-slider"></span></label></div></div><div class="field-label">Description <span style="color:#666;font-weight:400">(optional)</span></div><textarea class="field-input" id="ex-description" rows="3" placeholder="Notes on form..."></textarea><div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="saveExercise()">Save Exercise</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="closeExerciseModal()">Cancel</button></div>`;
-    if(id){const ex=getData('tt_exercises').find(e=>e.id===id);if(ex){document.getElementById('ex-name').value=ex.name;document.getElementById('ex-category').value=ex.category;document.getElementById('ex-unit').value=ex.unit;document.getElementById('ex-bw-weighted').checked=ex.bwWeighted||false;document.getElementById('ex-description').value=ex.description||'';}}
+    if(id){const ex=getExercises().find(e=>e.id===id);if(ex){document.getElementById('ex-name').value=ex.name;document.getElementById('ex-category').value=ex.category;document.getElementById('ex-unit').value=ex.unit;document.getElementById('ex-bw-weighted').checked=ex.bwWeighted||false;document.getElementById('ex-description').value=ex.description||'';}}
     else{if(pN)document.getElementById('ex-name').value=pN;if(pC)document.getElementById('ex-category').value=pC;}
     updateUnitPreview();modal.style.display='flex';
   }
@@ -1021,30 +1247,30 @@
 
   function saveExercise(){
     const name=document.getElementById('ex-name').value.trim();if(!name){alert('Please enter an exercise name');return;}
-    const exercises=getData('tt_exercises');
+    const exercises=getExercises();
     const exData={name,category:document.getElementById('ex-category').value,unit:document.getElementById('ex-unit').value,bwWeighted:document.getElementById('ex-bw-weighted').checked,description:document.getElementById('ex-description').value.trim()};
     if(editingExerciseId){const idx=exercises.findIndex(e=>e.id===editingExerciseId);if(idx>-1)Object.assign(exercises[idx],exData);}
     else{exercises.push({id:'E'+String(exercises.length+1).padStart(3,'0'),...exData});}
-    saveData('tt_exercises',exercises);closeExerciseModal();renderExerciseBank();
+    saveExercises(exercises);closeExerciseModal();renderExerciseBank();
   }
 
   function renderProgramsList(){
-    const programs=getData('tt_programs'),el=document.getElementById('programs-list');
+    const programs=getPrograms(),el=document.getElementById('programs-list');
     if(!programs.length){el.innerHTML=`<div class="empty-state"><p>No programs yet.</p><button class="btn" onclick="showDesignerSection('builder',document.querySelectorAll('#designer .sub-btn')[2])">Build New Program</button></div>`;return;}
     const order={active:0,draft:1,archived:2};
     el.innerHTML=[...programs].sort((a,b)=>(order[a.status]||0)-(order[b.status]||0)).map(p=>{
-      const actions=p.status==='draft'?`<button class="prog-action-btn primary" onclick="setActiveProgram('${p.id}')">Start</button><button class="prog-action-btn" onclick="editProgram('${p.id}')">Edit</button><button class="prog-action-btn danger" onclick="deleteProgram('${p.id}')">Delete</button>`:
-        p.status==='active'?`<button class="prog-action-btn" onclick="editProgram('${p.id}')">Edit</button><button class="prog-action-btn danger" onclick="finishProgram('${p.id}')">Finish</button>`:
-        `<button class="prog-action-btn" onclick="restoreProgram('${p.id}')">Restore</button><button class="prog-action-btn danger" onclick="deleteProgram('${p.id}')">Delete</button>`;
+      const actions=p.status==='draft'?`<button class="prog-action-btn primary" onclick="setActiveProgram('${p.id}')">Start</button><button class="prog-action-btn" onclick="editProgram('${p.id}')">Edit</button><button class="prog-action-btn danger" onclick="deleteProgramBtn('${p.id}')">Delete</button>`:
+        p.status==='active'?`<button class="prog-action-btn" onclick="editProgram('${p.id}')">Edit</button><button class="prog-action-btn danger" onclick="finishProgramBtn('${p.id}')">Finish</button>`:
+        `<button class="prog-action-btn" onclick="restoreProgramBtn('${p.id}')">Restore</button><button class="prog-action-btn danger" onclick="deleteProgramBtn('${p.id}')">Delete</button>`;
       return `<div class="program-list-card"><div class="program-list-top"><div class="program-list-name">${p.name}</div><span class="program-status-badge badge-${p.status}">${p.status.charAt(0).toUpperCase()+p.status.slice(1)}</span></div><div class="program-list-meta">${p.focus||'—'} &middot; ${p.totalWeeks||'—'} weeks</div><div class="program-list-actions">${actions}</div></div>`;
     }).join('');
   }
 
-  function setActiveProgram(id){const programs=getData('tt_programs');programs.forEach(p=>{if(p.status==='active')p.status='archived';});const p=programs.find(p=>p.id===id);if(p){p.status='active';p.currentWeek=1;p.completedWorkouts=0;}saveData('tt_programs',programs);renderProgramsList();renderProgramCard();renderTrainingStats();}
-  function restoreProgram(id){const programs=getData('tt_programs');const p=programs.find(p=>p.id===id);if(p)p.status='draft';saveData('tt_programs',programs);renderProgramsList();}
-  function finishProgram(id){const programs=getData('tt_programs');const p=programs.find(p=>p.id===id);if(p)p.status='archived';saveData('tt_programs',programs);renderProgramsList();renderProgramCard();renderTrainingStats();}
-  function deleteProgram(id){if(!confirm('Delete this program? This cannot be undone.'))return;saveData('tt_programs',getData('tt_programs').filter(p=>p.id!==id));renderProgramsList();renderProgramCard();}
-  function editProgram(id){const programs=getData('tt_programs');const p=programs.find(p=>p.id===id);showDesignerSection('builder',document.querySelectorAll('#designer .sub-btn')[2]);initBuilder(p);}
+  async function setActiveProgram(id){const programs=getPrograms();for(const p of programs){if(p.status==='active'){p.status='archived';await saveProgram(p);}}const p=programs.find(p=>p.id===id);if(p){p.status='active';p.currentWeek=1;p.completedWorkouts=0;await saveProgram(p);}renderProgramsList();renderProgramCard();renderTrainingStats();}
+  async function restoreProgramBtn(id){const p=getPrograms().find(p=>p.id===id);if(p){p.status='draft';await saveProgram(p);}renderProgramsList();}
+  async function finishProgramBtn(id){const p=getPrograms().find(p=>p.id===id);if(p){p.status='archived';await saveProgram(p);}renderProgramsList();renderProgramCard();renderTrainingStats();}
+  async function deleteProgramBtn(id){if(!confirm('Delete this program? This cannot be undone.'))return;await deleteProgram(id);renderProgramsList();renderProgramCard();}
+  function editProgram(id){const p=getPrograms().find(p=>p.id===id);showDesignerSection('builder',document.querySelectorAll('#designer .sub-btn')[2]);initBuilder(p);}
 
   // ── BUILDER ──
   let builderState={step:1,program:{name:'',focus:'Hypertrophy',description:'',startDate:'',totalWeeks:8,days:[]}};
@@ -1119,12 +1345,12 @@
           if(group.type==='superset'){
             html+=`<div class="superset-group"><div class="superset-label">Superset ${group.label}</div>`;
             group.indices.forEach((ei,pos)=>{
-              const ex=session.exercises[ei];const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
+              const ex=session.exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
               html+=`<div class="session-exercise-row"><div style="flex:1"><span class="se-superset-badge">${group.label}${pos+1}</span><span class="se-name">${exData.name}</span><div class="se-prescription" style="margin-top:2px">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;gap:4px;align-items:center"><button onclick="unlinkSuperset('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#666;font-size:11px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button></div></div>`;
             });
             html+=`</div>`;
           } else {
-            const ei=group.index;const ex=session.exercises[ei];const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;
+            const ei=group.index;const ex=session.exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
             const otherAvailable=session.exercises.some((e,idx)=>idx!==ei&&!e.supersetGroup);
             html+=`<div class="session-exercise-row"><div style="flex:1"><div class="se-name">${exData.name}</div><div class="se-prescription">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>${otherAvailable?`<button class="link-superset-btn" onclick="openSupersetPicker('${activeDayKey}',${si},${ei})">Link superset</button>`:''}</div></div>`;
           }
@@ -1151,7 +1377,7 @@
     const session=day.sessions[si];
     const others=session.exercises.map((e,idx)=>({e,idx})).filter(({e,idx})=>idx!==ei&&!e.supersetGroup);
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
-    box.innerHTML=`<div class="modal-title">Link as Superset</div><div style="font-size:13px;color:#888;margin-bottom:16px">Choose an exercise to pair with this one</div>${others.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No available exercises to link.</div>':others.map(({e,idx})=>{const exData=getData('tt_exercises').find(ex=>ex.id===e.exId);if(!exData)return '';return `<div class="picker-exercise-row" onclick="linkSuperset('${dk}',${si},${ei},${idx});document.getElementById('exercise-modal').style.display='none'"><div><div class="picker-ex-name">${exData.name}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`;}).join('')}<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;
+    box.innerHTML=`<div class="modal-title">Link as Superset</div><div style="font-size:13px;color:#888;margin-bottom:16px">Choose an exercise to pair with this one</div>${others.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No available exercises to link.</div>':others.map(({e,idx})=>{const exData=getExercises().find(ex=>ex.id===e.exId);if(!exData)return '';return `<div class="picker-exercise-row" onclick="linkSuperset('${dk}',${si},${ei},${idx});document.getElementById('exercise-modal').style.display='none'"><div><div class="picker-ex-name">${exData.name}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`;}).join('')}<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;
     modal.style.display='flex';
   }
 
@@ -1199,7 +1425,7 @@
   }
 
   function renderPickerList(search){
-    const exercises=getData('tt_exercises').filter(e=>CATEGORIES.includes(e.category));
+    const exercises=getExercises().filter(e=>CATEGORIES.includes(e.category));
     const filtered=exercises.filter(e=>e.name.toLowerCase().includes(search.toLowerCase()));
     const grouped={};CATEGORIES.forEach(cat=>{const catEx=filtered.filter(e=>e.category===cat);if(catEx.length>0)grouped[cat]=catEx;});
     let html='';Object.entries(grouped).forEach(([cat,exs])=>{html+=`<div class="picker-cat-label">${cat}</div>`;exs.forEach(e=>{html+=`<div class="picker-exercise-row" onclick="selectExerciseFromPicker('${e.id}')"><div><div class="picker-ex-name">${e.name}</div><div class="picker-ex-unit">${unitLabel(e.unit,e.bwWeighted)}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`;});});
@@ -1208,7 +1434,7 @@
   }
 
   function selectExerciseFromPicker(exId){
-    const ex=getData('tt_exercises').find(e=>e.id===exId);if(!ex)return;
+    const ex=getExercises().find(e=>e.id===exId);if(!ex)return;
     const box=document.getElementById('exercise-modal-box');
     let fh='';
     if(ex.unit==='duration'||ex.unit==='hyrox'){fh=`<div class="field-label">Notes / Target</div><input class="field-input" id="presc-notes" type="text" placeholder="${ex.unit==='hyrox'?'Workout structure...':'Target e.g. sub 25:00'}">`;}
@@ -1217,7 +1443,7 @@
   }
 
   function savePrescription(exId){
-    const ex=getData('tt_exercises').find(e=>e.id===exId);if(!ex)return;
+    const ex=getExercises().find(e=>e.id===exId);if(!ex)return;
     const entry={exId,sets:null,reps:null,notes:'',phases:[]};
     if(ex.unit==='duration'||ex.unit==='hyrox'){entry.notes=document.getElementById('presc-notes').value.trim();}
     else{entry.sets=parseInt(document.getElementById('presc-sets').value)||4;entry.reps=parseInt(document.getElementById('presc-reps').value)||8;entry.notes=document.getElementById('presc-notes').value.trim();}
@@ -1230,7 +1456,7 @@
 
   function renderStep3(body){
     const weeks=builderState.program.totalWeeks;let allEx=[];
-    builderState.program.days.forEach(day=>{day.sessions.forEach(session=>{session.exercises.forEach(ex=>{const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(exData&&ex.sets)allEx.push({dayName:day.name,sessionLabel:session.label,ex,exData});});});});
+    builderState.program.days.forEach(day=>{day.sessions.forEach(session=>{session.exercises.forEach(ex=>{const exData=getExercises().find(e=>e.id===ex.exId);if(exData&&ex.sets)allEx.push({dayName:day.name,sessionLabel:session.label,ex,exData});});});});
     let html=`<div style="font-size:13px;color:#888;margin-bottom:16px">Set week-by-week changes. Leave as-is to keep the same prescription all ${weeks} weeks.</div>`;
     if(allEx.length===0)html+=`<div class="card" style="text-align:center;color:#666"><p>No exercises with sets/reps to configure.</p></div>`;
     else allEx.forEach(({dayName,sessionLabel,ex,exData},idx)=>{
@@ -1261,23 +1487,22 @@
         html+=`<div class="review-day-block"><div class="review-day-name">${DAY_NAMES[dow]}</div><div class="review-day-date">${dateDisplay(dk,{day:'numeric',month:'long'})}</div>`;
         day.sessions.forEach(session=>{
           if(session.label)html+=`<div class="review-session-label">${session.label}</div>`;
-          session.exercises.forEach(ex=>{const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return;const badge=ex.supersetGroup?`<span class="se-superset-badge">${ex.supersetGroup}</span>`:'';html+=`<div class="review-exercise-row"><div class="review-ex-name">${badge}${exData.name}</div><div class="review-ex-presc">${formatPrescription(exData.unit,ex)}</div></div>`;});
+          session.exercises.forEach(ex=>{const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;const badge=ex.supersetGroup?`<span class="se-superset-badge">${ex.supersetGroup}</span>`:'';html+=`<div class="review-exercise-row"><div class="review-ex-name">${badge}${exData.name}</div><div class="review-ex-presc">${formatPrescription(exData.unit,ex)}</div></div>`;});
         });
         html+=`</div>`;
       });
     });
-    html+=`<div class="builder-nav"><button class="btn-outline" onclick="builderBack()">Back</button><button class="btn" style="flex:1;margin-top:0;background:#3a3a3a;color:#ccc" onclick="saveProgram('draft')">Save as Draft</button><button class="btn" style="flex:1;margin-top:0" onclick="saveProgram('active')">Start Now</button></div>`;
+    html+=`<div class="builder-nav"><button class="btn-outline" onclick="builderBack()">Back</button><button class="btn" style="flex:1;margin-top:0;background:#3a3a3a;color:#ccc" onclick="saveProgramToDb('draft')">Save as Draft</button><button class="btn" style="flex:1;margin-top:0" onclick="saveProgramToDb('active')">Start Now</button></div>`;
     body.innerHTML=html;
   }
 
-  function saveProgram(status){
-    const programs=getData('tt_programs');const p=builderState.program;
-    if(status==='active')programs.forEach(pr=>{if(pr.status==='active')pr.status='archived';});
+  async function saveProgramToDb(status){
+    const programs=getPrograms();const p=builderState.program;
+    if(status==='active'){for(const pr of programs){if(pr.status==='active'){pr.status='archived';await saveProgram(pr);}}}
     const tw=p.days.reduce((sum,d)=>sum+d.sessions.reduce((s2,s)=>s2+s.exercises.length,0),0);
-    const existing=programs.findIndex(pr=>pr.id===p.id);
     const pd={...p,id:p.id||'P'+Date.now(),status,currentWeek:p.currentWeek||1,completedWorkouts:p.completedWorkouts||0,totalWorkouts:Math.max(tw,p.days.length)};
-    if(existing>-1)programs[existing]=pd;else programs.push(pd);
-    saveData('tt_programs',programs);renderProgramCard();renderTrainingStats();
+    await saveProgram(pd);
+    renderProgramCard();renderTrainingStats();
     showDesignerSection('programs',document.querySelectorAll('#designer .sub-btn')[1]);renderProgramsList();
   }
 
@@ -1297,14 +1522,14 @@
   let stlSurfView='list',stlSurfDetailId=null;
   function renderStlSurfing(){
     const body=document.getElementById('stl-surf-body');
-    const surfs=[...getData('tt_surfs')].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const surfs=[...getSurfs()].sort((a,b)=>new Date(b.date)-new Date(a.date));
     const now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
     const ms=surfs.filter(s=>{const d=new Date(s.date);return d.getMonth()===tm&&d.getFullYear()===ty;});
     const totalMins=surfs.reduce((s,x)=>s+(x.duration||0),0);
     const fmt=m=>Math.floor(m/60)+'h'+(m%60>0?String(m%60).padStart(2,'0')+'m':'');
     if(stlSurfView==='detail'&&stlSurfDetailId){
       const surf=surfs.find(s=>s.id===stlSurfDetailId);if(!surf){stlSurfView='list';renderStlSurfing();return;}
-      body.innerHTML=`<button class="detail-back-btn" onclick="stlSurfView='list';renderStlSurfing()">← Back to Surfs</button><div class="detail-ref-badge">${surf.id}</div><div class="detail-title">${surf.location}</div><div class="detail-meta">${dateDisplay(surf.date,{weekday:'long',day:'numeric',month:'long',year:'numeric'})} &middot; ${fmt(surf.duration||0)}</div>${surf.swellComments?`<div class="detail-section">Swell</div><div class="detail-body">${surf.swellComments}</div>`:''} ${surf.comments?`<div class="detail-section">Session Notes</div><div class="detail-body">${surf.comments}</div>`:''}<button class="btn" style="background:rgba(255,80,80,0.15);color:#FF5050;margin-top:24px" onclick="deleteStlEntry('tt_surfs','${surf.id}',()=>{stlSurfView='list';renderStlSurfing();renderSurfStats();renderLifeCalendar();})">Delete Entry</button>`;
+      body.innerHTML=`<button class="detail-back-btn" onclick="stlSurfView='list';renderStlSurfing()">← Back to Surfs</button><div class="detail-ref-badge">${surf.id}</div><div class="detail-title">${surf.location}</div><div class="detail-meta">${dateDisplay(surf.date,{weekday:'long',day:'numeric',month:'long',year:'numeric'})} &middot; ${fmt(surf.duration||0)}</div>${surf.swell_comments||surf.swellComments?`<div class="detail-section">Swell</div><div class="detail-body">${surf.swell_comments||surf.swellComments}</div>`:''} ${surf.comments?`<div class="detail-section">Session Notes</div><div class="detail-body">${surf.comments}</div>`:''}<button class="btn" style="background:rgba(255,80,80,0.15);color:#FF5050;margin-top:24px" onclick="deleteStlSurf('${surf.id}')">Delete Entry</button>`;
       return;
     }
     if(stlSurfView==='add'){
@@ -1313,22 +1538,24 @@
     }
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Surfs</div><div class="stat-value">${surfs.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${ms.length}</div></div><div class="stat-card" style="grid-column:span 2"><div class="stat-label">Total Time in Water</div><div class="stat-value" style="font-size:20px">${fmt(totalMins)}</div></div></div><button class="btn" onclick="stlSurfView='add';renderStlSurfing()">+ Log New Surf</button><div class="section-title" style="margin-top:20px">Surf Log</div>${surfs.length===0?'<div class="empty-state"><p>No surfs logged yet.</p></div>':surfs.map(s=>`<div class="entry-list-item" onclick="stlSurfDetailId='${s.id}';stlSurfView='detail';renderStlSurfing()"><div><div class="entry-ref">${s.id}</div><div class="entry-title">${s.location}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})} &middot; ${fmt(s.duration||0)}</div></div><div class="entry-chevron">›</div></div>`).join('')}`;
   }
-  function saveStlSurf(){
-    const surfs=getData('tt_surfs');
-    surfs.push({id:'SURF'+String(surfs.length+1).padStart(3,'0'),date:document.getElementById('surf-date').value,location:document.getElementById('surf-loc').value.trim()||'Unknown',duration:parseInt(document.getElementById('surf-dur').value)||0,swellComments:document.getElementById('surf-swell').value.trim(),comments:document.getElementById('surf-notes').value.trim()});
-    saveData('tt_surfs',surfs);stlSurfView='list';renderStlSurfing();renderSurfStats();renderLifeCalendar();
+
+  async function saveStlSurf(){
+    const s={id:'SURF'+String(getSurfs().length+1).padStart(3,'0'),date:document.getElementById('surf-date').value,location:document.getElementById('surf-loc').value.trim()||'Unknown',duration:parseInt(document.getElementById('surf-dur').value)||0,swellComments:document.getElementById('surf-swell').value.trim(),comments:document.getElementById('surf-notes').value.trim()};
+    await saveSurf(s);stlSurfView='list';renderStlSurfing();renderSurfStats();renderLifeCalendar();
   }
+
+  async function deleteStlSurf(id){if(!confirm('Delete this entry?'))return;await deleteSurf(id);stlSurfView='list';renderStlSurfing();renderSurfStats();renderLifeCalendar();}
 
   let stlMobView='list',stlMobDetailId=null,mobSessionExercises=[];
   function renderStlMobility(){
     const body=document.getElementById('stl-mob-body');
-    const sessions=[...getData('tt_mobility')].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const sessions=[...getMobility()].sort((a,b)=>new Date(b.date)-new Date(a.date));
     const now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
     const mc=sessions.filter(s=>{const d=new Date(s.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).length;
     if(stlMobView==='detail'&&stlMobDetailId){
       const session=sessions.find(s=>s.id===stlMobDetailId);if(!session){stlMobView='list';renderStlMobility();return;}
-      const exNames=(session.exercises||[]).map(ex=>{const found=getData('tt_exercises').find(e=>e.id===ex.exId);return found?`<div style="padding:6px 0;border-bottom:1px solid #333;font-size:13px;color:#ccc">${found.name} — ${ex.sets}×${ex.reps}${ex.notes?' ('+ex.notes+')':''}</div>`:''}).join('');
-      body.innerHTML=`<button class="detail-back-btn" onclick="stlMobView='list';renderStlMobility()">← Back to Mobility</button><div class="detail-ref-badge">${session.id}</div><div class="detail-title">${session.name||session.type}</div><div class="detail-meta">${session.type} &middot; ${dateDisplay(session.date,{day:'numeric',month:'long',year:'numeric'})}${session.duration?' &middot; '+session.duration+' mins':''}</div>${session.description?`<div class="detail-section">Description</div><div class="detail-body">${session.description}</div>`:''}${exNames?`<div class="detail-section">Exercises</div>${exNames}`:''}<button class="btn" style="background:rgba(255,80,80,0.15);color:#FF5050;margin-top:24px" onclick="deleteStlEntry('tt_mobility','${session.id}',()=>{stlMobView='list';renderStlMobility();renderLifeCalendar();})">Delete Session</button>`;
+      const exNames=(session.exercises||[]).map(ex=>{const found=getExercises().find(e=>e.id===ex.exId);return found?`<div style="padding:6px 0;border-bottom:1px solid #333;font-size:13px;color:#ccc">${found.name} — ${ex.sets}×${ex.reps}${ex.notes?' ('+ex.notes+')':''}</div>`:''}).join('');
+      body.innerHTML=`<button class="detail-back-btn" onclick="stlMobView='list';renderStlMobility()">← Back to Mobility</button><div class="detail-ref-badge">${session.id}</div><div class="detail-title">${session.name||session.type}</div><div class="detail-meta">${session.type} &middot; ${dateDisplay(session.date,{day:'numeric',month:'long',year:'numeric'})}${session.duration?' &middot; '+session.duration+' mins':''}</div>${session.description?`<div class="detail-section">Description</div><div class="detail-body">${session.description}</div>`:''}${exNames?`<div class="detail-section">Exercises</div>${exNames}`:''}<button class="btn" style="background:rgba(255,80,80,0.15);color:#FF5050;margin-top:24px" onclick="deleteStlMob('${session.id}')">Delete Session</button>`;
       return;
     }
     if(stlMobView==='add'){
@@ -1338,33 +1565,38 @@
     }
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div></div><button class="btn" onclick="stlMobView='add';renderStlMobility()">+ Log Mobility Session</button><div class="section-title" style="margin-top:20px">Session Log</div>${sessions.length===0?'<div class="empty-state"><p>No mobility sessions logged yet.</p></div>':sessions.map(s=>`<div class="entry-list-item" onclick="stlMobDetailId='${s.id}';stlMobView='detail';renderStlMobility()"><div><div class="entry-ref">${s.id}</div><div class="entry-title">${s.name||s.type}</div><div class="entry-sub">${s.type} &middot; ${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})}${s.duration?' &middot; '+s.duration+' mins':''}</div></div><div class="entry-chevron">›</div></div>`).join('')}`;
   }
+
   function renderMobExList(){
     const el=document.getElementById('mob-ex-list');if(!el)return;
     if(mobSessionExercises.length===0){el.innerHTML='';return;}
-    el.innerHTML=mobSessionExercises.map((ex,i)=>{const exData=getData('tt_exercises').find(e=>e.id===ex.exId);if(!exData)return '';return `<div class="mob-exercise-row"><div class="mob-ex-name">${exData.name}</div><div class="mob-fields"><div style="flex:1"><div class="field-label" style="margin-top:0">Sets</div><input class="field-input" style="padding:8px;text-align:center" type="number" min="1" value="${ex.sets||3}" onchange="mobSessionExercises[${i}].sets=parseInt(this.value)||1"></div><div style="flex:1"><div class="field-label" style="margin-top:0">Reps</div><input class="field-input" style="padding:8px;text-align:center" type="number" min="1" value="${ex.reps||10}" onchange="mobSessionExercises[${i}].reps=parseInt(this.value)||1"></div><div style="flex:2"><div class="field-label" style="margin-top:0">Notes</div><input class="field-input" style="padding:8px" type="text" placeholder="e.g. hold 30s" value="${ex.notes||''}" onchange="mobSessionExercises[${i}].notes=this.value"></div><button onclick="mobSessionExercises.splice(${i},1);renderMobExList()" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:0 4px;align-self:flex-end;padding-bottom:4px">×</button></div></div>`;}).join('');
+    el.innerHTML=mobSessionExercises.map((ex,i)=>{const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return '';return `<div class="mob-exercise-row"><div class="mob-ex-name">${exData.name}</div><div class="mob-fields"><div style="flex:1"><div class="field-label" style="margin-top:0">Sets</div><input class="field-input" style="padding:8px;text-align:center" type="number" min="1" value="${ex.sets||3}" onchange="mobSessionExercises[${i}].sets=parseInt(this.value)||1"></div><div style="flex:1"><div class="field-label" style="margin-top:0">Reps</div><input class="field-input" style="padding:8px;text-align:center" type="number" min="1" value="${ex.reps||10}" onchange="mobSessionExercises[${i}].reps=parseInt(this.value)||1"></div><div style="flex:2"><div class="field-label" style="margin-top:0">Notes</div><input class="field-input" style="padding:8px" type="text" placeholder="e.g. hold 30s" value="${ex.notes||''}" onchange="mobSessionExercises[${i}].notes=this.value"></div><button onclick="mobSessionExercises.splice(${i},1);renderMobExList()" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:0 4px;align-self:flex-end;padding-bottom:4px">×</button></div></div>`;}).join('');
   }
+
   function openMobExercisePicker(){
-    const exercises=getData('tt_exercises').filter(e=>e.category==='Mobility');
+    const exercises=getExercises().filter(e=>e.category==='Mobility');
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
     box.innerHTML=`<div class="modal-title">Add Mobility Exercise</div>${exercises.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No mobility exercises in bank yet.</div>':exercises.sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`<div class="picker-exercise-row" onclick="addMobExercise('${e.id}')"><div><div class="picker-ex-name">${e.name}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`).join('')}<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;
     modal.style.display='flex';
   }
+
   function addMobExercise(exId){mobSessionExercises.push({exId,sets:3,reps:10,notes:''});document.getElementById('exercise-modal').style.display='none';renderMobExList();}
-  function saveStlMobility(){
-    const sessions=getData('tt_mobility');
-    sessions.push({id:'MOB'+String(sessions.length+1).padStart(3,'0'),date:document.getElementById('mob-date').value,type:document.getElementById('mob-type').value,name:document.getElementById('mob-name').value.trim(),description:document.getElementById('mob-desc').value.trim(),duration:parseInt(document.getElementById('mob-duration').value)||0,exercises:[...mobSessionExercises]});
-    saveData('tt_mobility',sessions);stlMobView='list';renderStlMobility();renderLifeCalendar();
+
+  async function saveStlMobility(){
+    const m={id:'MOB'+String(getMobility().length+1).padStart(3,'0'),date:document.getElementById('mob-date').value,type:document.getElementById('mob-type').value,name:document.getElementById('mob-name').value.trim(),description:document.getElementById('mob-desc').value.trim(),duration:parseInt(document.getElementById('mob-duration').value)||0,exercises:[...mobSessionExercises]};
+    await saveMobility(m);stlMobView='list';renderStlMobility();renderLifeCalendar();
   }
+
+  async function deleteStlMob(id){if(!confirm('Delete this session?'))return;await deleteMobility(id);stlMobView='list';renderStlMobility();renderLifeCalendar();}
 
   let stlReadView='list',stlReadBookId=null;
   function renderStlReading(){
     const body=document.getElementById('stl-read-body');
-    const books=[...getData('tt_books')].sort((a,b)=>new Date(b.dateStarted)-new Date(a.dateStarted));
+    const books=[...getBooks()].sort((a,b)=>new Date(b.dateStarted)-new Date(a.dateStarted));
     if(stlReadView==='detail'&&stlReadBookId){
       const book=books.find(b=>b.id===stlReadBookId);if(!book){stlReadView='list';renderStlReading();return;}
       const pr=(book.pageLogs||[]).reduce((s,l)=>s+l.pages,0);const pct=book.totalPages?Math.min(100,Math.round((pr/book.totalPages)*100)):0;
       const logs=[...(book.pageLogs||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
-      body.innerHTML=`<button class="detail-back-btn" onclick="stlReadView='list';renderStlReading()">← Back to Reading</button><div class="detail-ref-badge">${book.id}</div><div class="detail-title">${book.title}</div><div class="detail-meta">Started ${dateDisplay(book.dateStarted,{day:'numeric',month:'long',year:'numeric'})}${book.finished?' &middot; ✓ Finished':''}</div><div style="margin:12px 0"><div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px"><span>${pr} pages read</span><span>${book.totalPages?pct+'% ('+book.totalPages+' total)':''}</span></div><div class="book-progress-bar"><div class="book-progress-fill" style="width:${pct}%"></div></div></div>${book.summary?`<div class="detail-section">Summary</div><div class="detail-body">${book.summary}</div>`:''}${book.learnings?`<div class="detail-section">Learnings</div><div class="detail-body">${book.learnings}</div>`:''}${!book.finished?`<div class="detail-section">Log Pages Read</div><div style="display:flex;gap:8px;margin-bottom:8px"><input class="field-input" id="page-log-pages" type="number" placeholder="Pages read" min="1" style="flex:1"><input class="field-input" id="page-log-date" type="date" value="${todayStr()}" style="flex:1"></div><button class="btn-sm" onclick="addPageLog('${book.id}')">Add Pages</button><div style="margin-top:16px"><button class="btn-sm secondary" onclick="openFinishBook('${book.id}')">Finish Book</button></div>`:''}<div class="detail-section">Reading Log</div>${logs.length===0?'<div style="font-size:13px;color:#555">No pages logged yet.</div>':logs.map(l=>`<div class="page-log-row"><span style="font-size:13px;color:#ccc">${dateDisplay(l.date,{day:'numeric',month:'short'})}</span><span style="font-size:13px;color:#4A9EFF">+${l.pages} pages</span></div>`).join('')}<button class="btn" style="background:rgba(255,80,80,0.15);color:#FF5050;margin-top:24px" onclick="deleteStlEntry('tt_books','${book.id}',()=>{stlReadView='list';renderStlReading();renderLifeCalendar();})">Delete Book</button>`;
+      body.innerHTML=`<button class="detail-back-btn" onclick="stlReadView='list';renderStlReading()">← Back to Reading</button><div class="detail-ref-badge">${book.id}</div><div class="detail-title">${book.title}</div><div class="detail-meta">Started ${dateDisplay(book.dateStarted,{day:'numeric',month:'long',year:'numeric'})}${book.finished?' &middot; ✓ Finished':''}</div><div style="margin:12px 0"><div style="display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:4px"><span>${pr} pages read</span><span>${book.totalPages?pct+'% ('+book.totalPages+' total)':''}</span></div><div class="book-progress-bar"><div class="book-progress-fill" style="width:${pct}%"></div></div></div>${book.summary?`<div class="detail-section">Summary</div><div class="detail-body">${book.summary}</div>`:''}${book.learnings?`<div class="detail-section">Learnings</div><div class="detail-body">${book.learnings}</div>`:''}${!book.finished?`<div class="detail-section">Log Pages Read</div><div style="display:flex;gap:8px;margin-bottom:8px"><input class="field-input" id="page-log-pages" type="number" placeholder="Pages read" min="1" style="flex:1"><input class="field-input" id="page-log-date" type="date" value="${todayStr()}" style="flex:1"></div><button class="btn-sm" onclick="addPageLog('${book.id}')">Add Pages</button><div style="margin-top:16px"><button class="btn-sm secondary" onclick="openFinishBook('${book.id}')">Finish Book</button></div>`:''}<div class="detail-section">Reading Log</div>${logs.length===0?'<div style="font-size:13px;color:#555">No pages logged yet.</div>':logs.map(l=>`<div class="page-log-row"><span style="font-size:13px;color:#ccc">${dateDisplay(l.date,{day:'numeric',month:'short'})}</span><span style="font-size:13px;color:#4A9EFF">+${l.pages} pages</span></div>`).join('')}<button class="btn" style="background:rgba(255,80,80,0.15);color:#FF5050;margin-top:24px" onclick="deleteStlBook('${book.id}')">Delete Book</button>`;
       return;
     }
     if(stlReadView==='add'){body.innerHTML=`<button class="detail-back-btn" onclick="stlReadView='list';renderStlReading()">← Cancel</button><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Add New Book</div><div class="field-label">Book Title</div><input class="field-input" id="book-title" type="text" placeholder="e.g. Atomic Habits"><div class="field-label">Total Pages</div><input class="field-input" id="book-pages" type="number" placeholder="320" min="1"><div class="field-label">Date Started</div><input class="field-input" id="book-start" type="date" value="${todayStr()}"><button class="btn" style="margin-top:16px" onclick="saveNewBook()">Add Book</button>`;return;}
@@ -1372,76 +1604,59 @@
     const active=books.filter(b=>!b.finished),finished=books.filter(b=>b.finished);
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Books Read</div><div class="stat-value">${finished.length}</div></div><div class="stat-card"><div class="stat-label">Currently Reading</div><div class="stat-value">${active.length}</div></div></div><button class="btn" onclick="stlReadView='add';renderStlReading()">+ Add New Book</button>${active.length>0?`<div class="section-title" style="margin-top:20px">Currently Reading</div>${active.map(b=>{const pr=(b.pageLogs||[]).reduce((s,l)=>s+l.pages,0);const pct=b.totalPages?Math.min(100,Math.round((pr/b.totalPages)*100)):0;return `<div class="entry-list-item" onclick="stlReadBookId='${b.id}';stlReadView='detail';renderStlReading()"><div style="flex:1"><div class="entry-ref">${b.id}</div><div class="entry-title">${b.title}</div><div class="entry-sub">${pr}${b.totalPages?' of '+b.totalPages:''} pages &middot; ${pct}%</div><div class="book-progress-bar" style="margin-top:6px"><div class="book-progress-fill" style="width:${pct}%"></div></div></div><div class="entry-chevron" style="margin-left:12px">›</div></div>`;}).join('')}`:''}${finished.length>0?`<div class="section-title" style="margin-top:20px">Finished</div>${finished.map(b=>`<div class="entry-list-item" onclick="stlReadBookId='${b.id}';stlReadView='detail';renderStlReading()"><div><div class="entry-ref">${b.id}</div><div class="entry-title">${b.title} ✓</div><div class="entry-sub">Started ${dateDisplay(b.dateStarted,{day:'numeric',month:'short',year:'numeric'})}</div></div><div class="entry-chevron">›</div></div>`).join('')}`:''}${books.length===0?'<div class="empty-state"><p>No books added yet.</p></div>':''}`;
   }
-  function saveNewBook(){const title=document.getElementById('book-title').value.trim();if(!title){alert('Please enter a title');return;}const books=getData('tt_books');books.push({id:'READ'+String(books.length+1).padStart(3,'0'),title,totalPages:parseInt(document.getElementById('book-pages').value)||0,dateStarted:document.getElementById('book-start').value,finished:false,pageLogs:[],summary:'',learnings:''});saveData('tt_books',books);stlReadView='list';renderStlReading();}
-  function addPageLog(bookId){const pages=parseInt(document.getElementById('page-log-pages').value);const date=document.getElementById('page-log-date').value;if(!pages||pages<1){alert('Please enter pages read');return;}const books=getData('tt_books');const book=books.find(b=>b.id===bookId);if(!book)return;if(!book.pageLogs)book.pageLogs=[];book.pageLogs.push({date,pages});saveData('tt_books',books);renderStlReading();renderLifeCalendar();}
+
+  async function saveNewBook(){const title=document.getElementById('book-title').value.trim();if(!title){alert('Please enter a title');return;}const b={id:'READ'+String(getBooks().length+1).padStart(3,'0'),title,totalPages:parseInt(document.getElementById('book-pages').value)||0,dateStarted:document.getElementById('book-start').value,finished:false,pageLogs:[],summary:'',learnings:''};await saveBook(b);stlReadView='list';renderStlReading();}
+
+  async function addPageLog(bookId){const pages=parseInt(document.getElementById('page-log-pages').value);const date=document.getElementById('page-log-date').value;if(!pages||pages<1){alert('Please enter pages read');return;}const book=getBooks().find(b=>b.id===bookId);if(!book)return;if(!book.pageLogs)book.pageLogs=[];book.pageLogs.push({date,pages});await saveBook(book);renderStlReading();renderLifeCalendar();}
+
   function openFinishBook(id){stlReadBookId=id;stlReadView='finish';renderStlReading();}
-  function finishBook(id){const books=getData('tt_books');const b=books.find(b=>b.id===id);if(!b)return;b.finished=true;b.summary=document.getElementById('finish-summary').value.trim();b.learnings=document.getElementById('finish-learnings').value.trim();saveData('tt_books',books);stlReadView='detail';renderStlReading();}
+
+  async function finishBook(id){const book=getBooks().find(b=>b.id===id);if(!book)return;book.finished=true;book.summary=document.getElementById('finish-summary').value.trim();book.learnings=document.getElementById('finish-learnings').value.trim();await saveBook(book);stlReadView='detail';renderStlReading();}
+
+  async function deleteStlBook(id){if(!confirm('Delete this book?'))return;await deleteBook(id);stlReadView='list';renderStlReading();renderLifeCalendar();}
 
   let stlMindView='list';
   function renderStlMindfulness(){
     const body=document.getElementById('stl-mind-body');
-    const sessions=[...getData('tt_mindfulness')].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const sessions=[...getMindfulness()].sort((a,b)=>new Date(b.date)-new Date(a.date));
     const now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
     const mc=sessions.filter(s=>{const d=new Date(s.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).length;
     if(stlMindView==='add'){body.innerHTML=`<button class="detail-back-btn" onclick="stlMindView='list';renderStlMindfulness()">← Cancel</button><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log Mindfulness Session</div><div class="field-label">Type</div><select class="field-input" id="mind-type"><option value="Meditation">Meditation</option><option value="Breathwork">Breathwork</option></select><div class="field-label">Duration (minutes)</div><input class="field-input" id="mind-duration" type="number" value="10" min="1"><div class="field-label">Date</div><input class="field-input" id="mind-date" type="date" value="${todayStr()}"><div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div><input class="field-input" id="mind-notes" type="text" placeholder="Any notes..."><button class="btn" style="margin-top:16px" onclick="saveStlMindfulness()">Save Session</button>`;return;}
-    body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div><div class="stat-card"><div class="stat-label">Meditation</div><div class="stat-value">${sessions.filter(s=>s.type==='Meditation').length}</div></div><div class="stat-card"><div class="stat-label">Breathwork</div><div class="stat-value">${sessions.filter(s=>s.type==='Breathwork').length}</div></div></div><button class="btn" onclick="stlMindView='add';renderStlMindfulness()">+ Log Session</button><div class="section-title" style="margin-top:20px">Session Log</div>${sessions.length===0?'<div class="empty-state"><p>No sessions logged yet.</p></div>':sessions.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-ref">${s.id}</div><div class="entry-title">${s.type}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})} &middot; ${s.duration} mins${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlEntry('tt_mindfulness','${s.id}',()=>{renderStlMindfulness();renderLifeCalendar();})" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
+    body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div><div class="stat-card"><div class="stat-label">Meditation</div><div class="stat-value">${sessions.filter(s=>s.type==='Meditation').length}</div></div><div class="stat-card"><div class="stat-label">Breathwork</div><div class="stat-value">${sessions.filter(s=>s.type==='Breathwork').length}</div></div></div><button class="btn" onclick="stlMindView='add';renderStlMindfulness()">+ Log Session</button><div class="section-title" style="margin-top:20px">Session Log</div>${sessions.length===0?'<div class="empty-state"><p>No sessions logged yet.</p></div>':sessions.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-ref">${s.id}</div><div class="entry-title">${s.type}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})} &middot; ${s.duration} mins${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlMind('${s.id}')" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
   }
-  function saveStlMindfulness(){
-    const sessions=getData('tt_mindfulness');
-    sessions.push({id:'MIND'+String(sessions.length+1).padStart(3,'0'),date:document.getElementById('mind-date').value,type:document.getElementById('mind-type').value,duration:parseInt(document.getElementById('mind-duration').value)||10,notes:document.getElementById('mind-notes').value.trim()});
-    saveData('tt_mindfulness',sessions);stlMindView='list';renderStlMindfulness();renderLifeCalendar();
+
+  async function saveStlMindfulness(){
+    const m={id:'MIND'+String(getMindfulness().length+1).padStart(3,'0'),date:document.getElementById('mind-date').value,type:document.getElementById('mind-type').value,duration:parseInt(document.getElementById('mind-duration').value)||10,notes:document.getElementById('mind-notes').value.trim()};
+    await saveMindfulness(m);stlMindView='list';renderStlMindfulness();renderLifeCalendar();
   }
+
+  async function deleteStlMind(id){if(!confirm('Delete this session?'))return;await deleteMindfulness(id);renderStlMindfulness();renderLifeCalendar();}
 
   let stlSportsView='list';
   function renderStlSports(){
     const body=document.getElementById('stl-sports-body');
-    const sports=[...getData('tt_sports')].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const sports=[...getSports()].sort((a,b)=>new Date(b.date)-new Date(a.date));
     const now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
     const mc=sports.filter(s=>{const d=new Date(s.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).length;
     const sportCounts={};sports.forEach(s=>{sportCounts[s.sport]=(sportCounts[s.sport]||0)+1;});
     const topSport=Object.entries(sportCounts).sort((a,b)=>b[1]-a[1])[0];
     if(stlSportsView==='add'){
-      body.innerHTML=`<button class="detail-back-btn" onclick="stlSportsView='list';renderStlSports()">← Cancel</button>
-        <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log a Sport</div>
-        <div class="field-label">Sport</div>
-        <input class="field-input" id="sport-name" type="text" placeholder="e.g. Volleyball, Basketball, Tennis">
-        <div class="field-label">Date</div>
-        <input class="field-input" id="sport-date" type="date" value="${todayStr()}">
-        <div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div>
-        <input class="field-input" id="sport-notes" type="text" placeholder="e.g. Beach volleyball with friends">
-        <button class="btn" style="margin-top:16px" onclick="saveStlSport()">Save</button>`;
+      body.innerHTML=`<button class="detail-back-btn" onclick="stlSportsView='list';renderStlSports()">← Cancel</button><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log a Sport</div><div class="field-label">Sport</div><input class="field-input" id="sport-name" type="text" placeholder="e.g. Volleyball, Basketball, Tennis"><div class="field-label">Date</div><input class="field-input" id="sport-date" type="date" value="${todayStr()}"><div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div><input class="field-input" id="sport-notes" type="text" placeholder="e.g. Beach volleyball with friends"><button class="btn" style="margin-top:16px" onclick="saveStlSport()">Save</button>`;
       return;
     }
-    body.innerHTML=`<div class="stat-grid" style="margin-top:16px">
-      <div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sports.length}</div></div>
-      <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div>
-      ${topSport?`<div class="stat-card" style="grid-column:span 2"><div class="stat-label">Most Played</div><div class="stat-value" style="font-size:20px">${topSport[0]}</div><div class="stat-unit">${topSport[1]} sessions total</div></div>`:''}
-    </div>
-    <button class="btn" onclick="stlSportsView='add';renderStlSports()">+ Log a Sport</button>
-    <div class="section-title" style="margin-top:20px">Sports Log</div>
-    ${sports.length===0?'<div class="empty-state"><p>No sports logged yet.</p></div>':sports.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-title">${s.sport}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})}${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlEntry('tt_sports','${s.id}',()=>{renderStlSports();renderLifeCalendar();})" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
-  }
-  function saveStlSport(){
-    const sport=document.getElementById('sport-name').value.trim();if(!sport){alert('Please enter a sport name');return;}
-    const sports=getData('tt_sports');
-    sports.push({id:'SPORT'+String(sports.length+1).padStart(3,'0'),sport,date:document.getElementById('sport-date').value,notes:document.getElementById('sport-notes').value.trim()});
-    saveData('tt_sports',sports);stlSportsView='list';renderStlSports();renderLifeCalendar();
+    body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sports.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div>${topSport?`<div class="stat-card" style="grid-column:span 2"><div class="stat-label">Most Played</div><div class="stat-value" style="font-size:20px">${topSport[0]}</div><div class="stat-unit">${topSport[1]} sessions total</div></div>`:''}</div><button class="btn" onclick="stlSportsView='add';renderStlSports()">+ Log a Sport</button><div class="section-title" style="margin-top:20px">Sports Log</div>${sports.length===0?'<div class="empty-state"><p>No sports logged yet.</p></div>':sports.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-title">${s.sport}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})}${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlSport('${s.id}')" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
   }
 
-  function deleteStlEntry(key,id,callback){if(!confirm('Delete this entry?'))return;saveData(key,getData(key).filter(i=>i.id!==id));if(callback)callback();}
+  async function saveStlSport(){
+    const sport=document.getElementById('sport-name').value.trim();if(!sport){alert('Please enter a sport name');return;}
+    const s={id:'SPORT'+String(getSports().length+1).padStart(3,'0'),sport,date:document.getElementById('sport-date').value,notes:document.getElementById('sport-notes').value.trim()};
+    await saveSport(s);stlSportsView='list';renderStlSports();renderLifeCalendar();
+  }
+
+  async function deleteStlSport(id){if(!confirm('Delete this entry?'))return;await deleteSport(id);renderStlSports();renderLifeCalendar();}
 
   // ── INIT ──
   function initApp(){
-    if(!getItem('tt_app_version')||getItem('tt_app_version')<'3'){
-      ['tt_workouts','tt_surfs','tt_programs','tt_prs','tt_mobility','tt_books',
-       'tt_mindfulness','tt_sports','tt_completed_sessions','tt_completed_workouts',
-       'tt_completed_days','tt_best_streak','tt_start_date'].forEach(k=>localStorage.removeItem(k));
-      setItem('tt_app_version','3');
-    }
-    if(!getItem('tt_completed_sessions'))saveData('tt_completed_sessions',[]);
-    if(!getItem('tt_completed_workouts'))saveData('tt_completed_workouts',[]);
-    if(!getItem('tt_start_date'))setItem('tt_start_date',todayStr());
-    seedExercises();
     setHeaderDate();
     drawSparkline();
     renderTrainingStats();
