@@ -126,7 +126,6 @@
     .category-header { display: flex; justify-content: space-between; align-items: center; background: #222; border-radius: 10px; padding: 12px 14px; cursor: pointer; }
     .category-header h3 { font-size: 14px; font-weight: 600; color: #fff; }
     .category-header .cat-count { font-size: 12px; color: #666; margin-left: 8px; }
-    .category-chevron { font-size: 12px; color: #666; transition: transform 0.2s; }
     .category-exercises { display: none; padding-top: 4px; }
     .category-exercises.open { display: block; }
     .exercise-row { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; border-radius: 8px; padding: 12px 14px; margin-bottom: 4px; }
@@ -187,18 +186,32 @@
     .week-nav-btn { background: none; border: 1px solid #3a3a3a; color: #888; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
     .session-block { background: #222; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
-    .session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+    .session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
+    .session-type-row { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .session-type-btn { background: #2a2a2a; border: 1px solid #3a3a3a; color: #888; border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    .session-type-btn.active { border-color: #4A9EFF; color: #4A9EFF; background: rgba(74,158,255,0.1); }
+    .session-type-btn.swim-active { border-color: #64C8FF; color: #64C8FF; background: rgba(100,200,255,0.1); }
+    .session-type-btn.run-active { border-color: #FF8C00; color: #FF8C00; background: rgba(255,140,0,0.1); }
+    .session-type-btn.mob-active { border-color: #FFC864; color: #FFC864; background: rgba(255,200,100,0.1); }
     .session-delete-btn { background: none; border: none; color: #FF5050; font-size: 12px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap; }
     .session-exercise-row { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; border-radius: 8px; padding: 10px 12px; margin-bottom: 4px; }
     .se-name { font-size: 13px; font-weight: 500; color: #fff; }
     .se-prescription { font-size: 12px; color: #4A9EFF; margin-top: 2px; }
     .se-notes { font-size: 11px; color: #666; margin-top: 2px; }
     .se-remove-btn { background: none; border: none; color: #666; font-size: 18px; cursor: pointer; padding: 0 4px; }
+    .se-reorder-btns { display: flex; flex-direction: column; gap: 2px; margin-right: 4px; }
+    .se-reorder-btn { background: none; border: none; color: #555; font-size: 12px; cursor: pointer; padding: 0; line-height: 1; }
+    .se-reorder-btn:hover { color: #888; }
+    .se-edit-btn { background: none; border: 1px solid #3a3a3a; color: #888; font-size: 11px; padding: 3px 8px; border-radius: 6px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin-right: 4px; }
     .add-session-btn { background: none; border: 1px dashed #444; color: #666; border-radius: 10px; padding: 10px; font-size: 13px; cursor: pointer; width: 100%; margin-top: 8px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     .add-exercise-btn { background: none; border: 1px dashed #3a3a3a; color: #888; border-radius: 8px; padding: 8px; font-size: 12px; cursor: pointer; width: 100%; margin-top: 4px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     .builder-nav { display: flex; gap: 10px; margin-top: 24px; }
 
-    /* ── MOBILITY BLOCK ── */
+    .superset-group { border-left: 3px solid #4A9EFF; border-radius: 0 8px 8px 0; margin-bottom: 6px; padding-left: 8px; }
+    .superset-label { font-size: 10px; font-weight: 700; color: #4A9EFF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+    .se-superset-badge { font-size: 10px; font-weight: 700; color: #4A9EFF; background: rgba(74,158,255,0.15); padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+    .link-superset-btn { background: none; border: none; color: #666; font-size: 11px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 2px 0; margin-top: 2px; }
+
     .mob-block-builder { border-left: 3px solid #FFC864; border-radius: 0 10px 10px 0; background: rgba(255,200,100,0.06); padding: 12px; margin-bottom: 8px; }
     .mob-block-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .mob-block-label { font-size: 11px; font-weight: 700; color: #FFC864; text-transform: uppercase; letter-spacing: 0.1em; }
@@ -207,18 +220,12 @@
     .mob-block-ex-row:last-child { border-bottom: none; }
     .add-mob-block-btn { background: none; border: 1px dashed #FFC864; color: #FFC864; border-radius: 8px; padding: 8px; font-size: 12px; cursor: pointer; width: 100%; margin-top: 4px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; opacity: 0.8; }
 
-    /* Logging — mobility block done card */
     .mob-block-log-card { border-left: 3px solid #FFC864; border-radius: 0 12px 12px 0; background: rgba(255,200,100,0.06); padding: 14px; margin-bottom: 10px; }
     .mob-block-log-label { font-size: 10px; font-weight: 700; color: #FFC864; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
     .mob-block-log-name { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 8px; }
     .mob-block-log-exlist { font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.8; }
     .mob-block-done-btn { background: rgba(255,200,100,0.15); border: 1px solid rgba(255,200,100,0.3); color: #FFC864; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     .mob-block-done-btn.completed { background: rgba(80,200,120,0.15); border-color: rgba(80,200,120,0.3); color: #50C878; cursor: default; }
-
-    .superset-group { border-left: 3px solid #4A9EFF; border-radius: 0 8px 8px 0; margin-bottom: 6px; padding-left: 8px; }
-    .superset-label { font-size: 10px; font-weight: 700; color: #4A9EFF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-    .se-superset-badge { font-size: 10px; font-weight: 700; color: #4A9EFF; background: rgba(74,158,255,0.15); padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
-    .link-superset-btn { background: none; border: none; color: #666; font-size: 11px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 2px 0; margin-top: 2px; }
 
     .picker-search { width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 10px; color: #fff; font-size: 14px; padding: 12px 14px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 12px; }
     .picker-search:focus { outline: none; border-color: #4A9EFF; }
@@ -270,11 +277,17 @@
     .workout-card-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px; }
     .workout-card-meta { font-size: 13px; color: #888; margin-bottom: 12px; }
 
-    .session-start-card { background: #222; border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .session-start-card { background: #222; border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; cursor: pointer; }
+    .session-start-card:hover { background: #252525; }
+    .session-start-card-top { display: flex; justify-content: space-between; align-items: center; }
     .session-start-label { font-size: 14px; font-weight: 600; color: #fff; }
     .session-start-meta { font-size: 12px; color: #888; margin-top: 2px; }
     .session-start-btn { background: #4A9EFF; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap; }
     .session-start-btn.done { background: rgba(80,200,120,0.15); color: #50C878; cursor: default; }
+    .session-exercise-preview { margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a2a2a; display: none; }
+    .session-exercise-preview.open { display: block; }
+    .session-preview-row { font-size: 12px; color: #888; padding: 3px 0; display: flex; justify-content: space-between; }
+    .session-preview-row span:last-child { color: #4A9EFF; }
 
     .log-exercise-card { background: #222; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
     .log-ex-name { font-size: 15px; font-weight: 700; color: #fff; }
@@ -335,6 +348,13 @@
     .sync-indicator.saving { display: block; color: #FFAA32; }
     .sync-indicator.saved { display: block; color: #50C878; }
     .sync-indicator.error { display: block; color: #FF5050; }
+
+    /* Repeat week banner */
+    .repeat-week-banner { background: rgba(74,158,255,0.08); border: 1px solid rgba(74,158,255,0.2); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+    .repeat-week-banner p { font-size: 13px; color: #888; margin-bottom: 10px; }
+
+    /* Swap exercise from week */
+    .swap-from-week-box { background: rgba(255,170,50,0.08); border: 1px solid rgba(255,170,50,0.2); border-radius: 10px; padding: 12px; margin-top: 8px; font-size: 12px; color: #FFAA32; }
   </style>
 </head>
 <body>
@@ -505,13 +525,18 @@
       sbGet('exercises'),sbGet('app_settings')
     ]);
     DB.workouts=workouts||[];
-    DB.programs=(programs||[]).map(p=>({...p.data,id:p.id}));
+    // ── FIX: programs stored as {id, data} — preserve full data including session exercises ──
+    DB.programs=(programs||[]).map(p=>{
+      if(p.data&&typeof p.data==='object'){return {...p.data,id:p.id};}
+      return p;
+    });
     DB.surfs=surfs||[];DB.prs=prs||[];
-    DB.mobility=(mobility||[]).map(m=>({...m.data,id:m.id}));
-    DB.books=(books||[]).map(b=>({...b.data,id:b.id}));
+    DB.mobility=(mobility||[]).map(m=>m.data?{...m.data,id:m.id}:m);
+    DB.books=(books||[]).map(b=>b.data?{...b.data,id:b.id}:b);
     DB.mindfulness=mindfulness||[];DB.sports=sports||[];
     DB.completed_sessions=cs||[];DB.completed_workouts=cw||[];
     DB.settings={};(settings||[]).forEach(r=>DB.settings[r.key]=r.value);
+    // ── FIX: only seed if truly empty ──
     DB.exercises=(exercises||[]).map(e=>({id:e.id,name:e.name,category:e.category,unit:e.unit,bwWeighted:e.bw_weighted,description:e.description}));
     if(DB.exercises.length===0)await seedExercises();
     if(!DB.settings.start_date){const t=todayStr();await sbUpsert('app_settings',{key:'start_date',value:t});DB.settings.start_date=t;}
@@ -536,7 +561,7 @@
   async function saveWorkout(w){DB.workouts.push(w);await sbUpsert('workouts',{id:w.id,date:w.date,type:w.type,name:w.name,total_kg:w.totalKg||0,exercises:w.exercises||[]});}
   async function saveSurf(s){DB.surfs.push(s);await sbUpsert('surfs',{id:s.id,date:s.date,location:s.location,duration:s.duration||0,swell_comments:s.swellComments||'',comments:s.comments||''});}
   async function deleteSurf(id){DB.surfs=DB.surfs.filter(s=>s.id!==id);await sbDel('surfs',id);}
-  async function saveProgram(p){const i=DB.programs.findIndex(x=>x.id===p.id);if(i>-1)DB.programs[i]=p;else DB.programs.push(p);await sbUpsert('programs',{id:p.id,data:p});}
+  async function saveProgram(p){const i=DB.programs.findIndex(x=>x.id===p.id);if(i>-1)DB.programs[i]=p;else DB.programs.push(p);await sbUpsert('programs',{id:p.id,data:JSON.parse(JSON.stringify(p))});}
   async function deleteProgram(id){DB.programs=DB.programs.filter(p=>p.id!==id);await sbDel('programs',id);}
   async function savePR(exercise,weight,date){const e=DB.prs.find(p=>p.exercise===exercise);if(e)e.weight=weight;else DB.prs.push({exercise,weight,date});await sbUpsert('prs',{exercise,weight,date});}
   async function saveMobility(m){DB.mobility.push(m);await sbUpsert('mobility',{id:m.id,data:m});}
@@ -572,7 +597,20 @@
   function diffDays(a,b){const[ay,am,ad]=a.split('-').map(Number);const[by,bm,bd]=b.split('-').map(Number);return Math.round((new Date(by,bm-1,bd)-new Date(ay,am-1,ad))/86400000);}
   const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
+  // ── SESSION TYPE HELPERS ──
+  const SESSION_TYPES=[
+    {value:'gym',label:'🏋️ Gym',pillClass:'pill-gym'},
+    {value:'swim',label:'🏊 Swimming',pillClass:'pill-swim'},
+    {value:'run',label:'🏃 Running',pillClass:'pill-run'},
+    {value:'mobility',label:'🧘 Mobility',pillClass:'pill-mobility'}
+  ];
+  function sessionTypePill(type,count){
+    const t=SESSION_TYPES.find(x=>x.value===type)||SESSION_TYPES[0];
+    return `<span class="activity-pill ${t.pillClass}">${t.label} ${count}x</span>`;
+  }
+
   async function seedExercises(){
+    // ONLY called when exercises table is completely empty
     const exs=[
       {id:'E001',name:'Bench Press',category:'Uppers',unit:'kg',bwWeighted:false,description:'Flat barbell bench press'},
       {id:'E002',name:'Overhead Press',category:'Uppers',unit:'kg',bwWeighted:false,description:'Standing barbell OHP'},
@@ -700,15 +738,26 @@
     const el=document.getElementById('calendar-weeks');el.innerHTML='';
     weeks.forEach((w,wi)=>{
       const valid=w.filter(d=>d!==null);if(!valid.length)return;
-      const counts={gym:0,run:0,swim:0,hyrox:0,core:0};
-      valid.forEach(d=>{const key=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');workouts.filter(x=>x.date===key).forEach(x=>{const t=x.type?.toLowerCase();if(counts[t]!==undefined)counts[t]++;else counts.gym++;});});
+      // Count by actual session type
+      const counts={gym:0,swim:0,run:0,mobility:0,hyrox:0};
+      valid.forEach(d=>{
+        const key=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        workouts.filter(x=>x.date===key).forEach(x=>{
+          const t=(x.type||'gym').toLowerCase();
+          if(t==='swim'||t==='swimming')counts.swim++;
+          else if(t==='run'||t==='running')counts.run++;
+          else if(t==='mobility')counts.mobility++;
+          else if(t==='hyrox')counts.hyrox++;
+          else counts.gym++;
+        });
+      });
       const has=Object.values(counts).some(v=>v>0);
       let pills='';
       if(counts.gym>0)pills+=`<span class="activity-pill pill-gym">🏋️ ${counts.gym}x gym</span>`;
-      if(counts.run>0)pills+=`<span class="activity-pill pill-run">🏃 ${counts.run}x run</span>`;
       if(counts.swim>0)pills+=`<span class="activity-pill pill-swim">🏊 ${counts.swim}x swim</span>`;
+      if(counts.run>0)pills+=`<span class="activity-pill pill-run">🏃 ${counts.run}x run</span>`;
+      if(counts.mobility>0)pills+=`<span class="activity-pill pill-mobility">🧘 ${counts.mobility}x mobility</span>`;
       if(counts.hyrox>0)pills+=`<span class="activity-pill pill-hyrox">⚡ ${counts.hyrox}x hyrox</span>`;
-      if(counts.core>0)pills+=`<span class="activity-pill pill-core">💪 ${counts.core}x core</span>`;
       const row=document.createElement('div');row.className='calendar-week';
       row.innerHTML=`<div class="week-label">Wk ${wi+1}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
@@ -751,9 +800,7 @@
   }
 
   // ── ACTIVE PROGRAM ──
-  let activeLogState=null,activeWeekOffset=0;
-  // Track which mobility blocks are done per session log
-  let mobBlocksDone={};
+  let activeLogState=null,activeWeekOffset=0,mobBlocksDone={};
 
   function renderActiveProgram(){
     const body=document.getElementById('active-body');
@@ -787,8 +834,7 @@
       const allDone=hasWorkout&&sessDone===sessTotal;
       const isToday=dateKey===today;
       let cls='week-strip-day';
-      if(allDone)cls+=' completed';
-      else if(isToday&&hasWorkout)cls+=' today';
+      if(allDone)cls+=' completed';else if(isToday&&hasWorkout)cls+=' today';
       if(!hasWorkout)cls+=' rest';
       return `<div class="${cls}" onclick="${hasWorkout?`selectActiveDay('${dateKey}')`:``}"><div class="wsd-name">${DAY_NAMES[d]}</div><div class="wsd-date">${parseInt(dateKey.split('-')[2])}</div>${allDone?'<div class="wsd-tick">✓</div>':hasWorkout?'<div class="wsd-dot"></div>':''}</div>`;
     }).join('');
@@ -808,7 +854,7 @@
         const exCount=session.exercises?.length||0;
         const hasMob=!!session.mobilityBlock;
         const exPreview=session.exercises?.slice(0,3).map(ex=>{const e=getExercises().find(e=>e.id===ex.exId);return e?e.name:'';}).filter(Boolean).join(', ')||'';
-        nextHtml=`<div class="section-title">Next Up</div><div class="workout-card"><div class="workout-card-title">${dayData.name}${session.label?' — '+session.label:''}</div><div class="workout-card-meta">${isToday?'Today':dateDisplay(nextDay,{weekday:'long',day:'numeric',month:'long'})} &middot; ${hasMob?'🧘 Mobility block + ':''}${exCount} exercises</div><div style="font-size:12px;color:#666;margin-bottom:12px">${exPreview}${exCount>3?'...':''}</div><button class="btn" onclick="startSession('${nextDay}',${nextSi})">Start ${session.label||'Workout'}</button></div>`;
+        nextHtml=`<div class="section-title">Next Up</div><div class="workout-card"><div class="workout-card-title">${dayData.name}${session.label?' — '+session.label:''}</div><div class="workout-card-meta">${isToday?'Today':dateDisplay(nextDay,{weekday:'long',day:'numeric',month:'long'})} &middot; ${hasMob?'🧘 + ':''}${exCount} exercises</div><div style="font-size:12px;color:#666;margin-bottom:12px">${exPreview}${exCount>3?'...':''}</div><button class="btn" onclick="startSession('${nextDay}',${nextSi})">Start ${session.label||'Workout'}</button></div>`;
       } else {
         nextHtml=`<div class="card"><h2>🎉 Week complete!</h2><p>All sessions done. Navigate weeks above or come back next week.</p></div>`;
       }
@@ -825,7 +871,33 @@
         const done=completedSessions.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si);
         const exCount=session.exercises?.length||0;
         const hasMob=!!session.mobilityBlock;
-        allSessionsHtml+=`<div class="session-start-card"><div><div class="session-start-label">${session.label||'Session '+(si+1)}</div><div class="session-start-meta">${hasMob?'🧘 + ':''}${exCount} exercises</div></div>${done?`<button class="session-start-btn done">✓ Done</button>`:`<button class="session-start-btn" onclick="startSession('${dateKey}',${si})">Start</button>`}</div>`;
+        const sessionId=`sess-${dateKey}-${si}`;
+        // Build exercise preview list
+        let previewRows='';
+        if(hasMob){
+          const mb=session.mobilityBlock;
+          const mobNames=mb.exercises.map(id=>{const e=getExercises().find(e=>e.id===id);return e?e.name:'';}).filter(Boolean);
+          previewRows+=`<div class="session-preview-row" style="color:#FFC864"><span>🧘 ${mb.name}</span><span style="color:#FFC864">${mb.rounds>1?mb.rounds+'x':''}</span></div>`;
+          mobNames.forEach(n=>previewRows+=`<div class="session-preview-row" style="padding-left:12px"><span>${n}</span></div>`);
+        }
+        (session.exercises||[]).forEach(ex=>{
+          const exData=getExercises().find(e=>e.id===ex.exId);
+          if(!exData)return;
+          previewRows+=`<div class="session-preview-row"><span>${exData.name}</span><span>${ex.sets&&ex.reps?ex.sets+'×'+ex.reps:ex.notes||''}</span></div>`;
+        });
+
+        allSessionsHtml+=`<div class="session-start-card" onclick="toggleSessionPreview('${sessionId}')">
+          <div class="session-start-card-top">
+            <div>
+              <div class="session-start-label">${session.label||'Session '+(si+1)}${session.type&&session.type!=='gym'?' '+SESSION_TYPES.find(t=>t.value===session.type)?.label.split(' ')[0]||'':''}</div>
+              <div class="session-start-meta">${hasMob?'🧘 + ':''}${exCount} exercises — tap to preview</div>
+            </div>
+            ${done?`<button class="session-start-btn done" onclick="event.stopPropagation()">✓ Done</button>`:`<button class="session-start-btn" onclick="event.stopPropagation();startSession('${dateKey}',${si})">Start</button>`}
+          </div>
+          <div class="session-exercise-preview" id="${sessionId}">
+            ${previewRows||'<div style="font-size:12px;color:#555">No exercises</div>'}
+          </div>
+        </div>`;
       });
     });
 
@@ -836,6 +908,11 @@
       ${nextHtml}
       <div class="section-title">Sessions This Week</div>
       ${allSessionsHtml||'<div style="font-size:13px;color:#555;padding:8px 0">No sessions scheduled this week</div>'}`;
+  }
+
+  function toggleSessionPreview(id){
+    const el=document.getElementById(id);
+    if(el)el.classList.toggle('open');
   }
 
   function selectActiveDay(dateKey){
@@ -857,41 +934,23 @@
     if(!session){activeLogState=null;renderActiveProgram();return;}
     const prevWorkouts=getCompletedWorkoutsNorm();
     const sessionLabel=session.label||'Session '+(state.sessionIdx+1);
-
     let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><button class="btn-outline" style="padding:8px 14px;font-size:13px;flex:none" onclick="activeLogState=null;renderActiveProgram()">← Back</button><div style="font-size:13px;color:#888">${dateDisplay(state.dateKey,{weekday:'long',day:'numeric',month:'long'})}</div></div><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">${dayData.name}</div><div style="font-size:14px;color:#4A9EFF;margin-bottom:4px">${sessionLabel}</div><div style="font-size:13px;color:#888;margin-bottom:20px">${program.name} &middot; Week ${program.currentWeek||1}</div>`;
-
-    // ── Mobility block FIRST ──
     if(session.mobilityBlock){
       const mb=session.mobilityBlock;
       const isDone=mobBlocksDone['mob']==='done';
       const exNames=mb.exercises.map(exId=>{const e=getExercises().find(e=>e.id===exId);return e?e.name:'';}).filter(Boolean);
-      html+=`<div class="mob-block-log-card">
-        <div class="mob-block-log-label">🧘 Mobility Block</div>
-        <div class="mob-block-log-name">${mb.name}${mb.rounds>1?' — '+mb.rounds+' rounds':''}</div>
-        <div class="mob-block-log-exlist">${exNames.map(n=>'• '+n).join('<br>')}</div>
-        <button class="mob-block-done-btn ${isDone?'completed':''}" onclick="markMobBlockDone()" ${isDone?'disabled':''}>
-          ${isDone?'✓ Mobility Complete':'Mark as Done ✓'}
-        </button>
-      </div>`;
+      html+=`<div class="mob-block-log-card"><div class="mob-block-log-label">🧘 Mobility Block</div><div class="mob-block-log-name">${mb.name}${mb.rounds>1?' — '+mb.rounds+' rounds':''}</div><div class="mob-block-log-exlist">${exNames.map(n=>'• '+n).join('<br>')}</div><button class="mob-block-done-btn ${isDone?'completed':''}" onclick="markMobBlockDone()" ${isDone?'disabled':''}>${isDone?'✓ Mobility Complete':'Mark as Done ✓'}</button></div>`;
     }
-
-    // ── Main exercises ──
     const groups=groupExercisesForLog(session.exercises||[]);
     groups.forEach(group=>{
       if(group.type==='superset'){html+=`<div class="log-superset-group"><div class="log-superset-label">Superset ${group.label}</div>`;group.exercises.forEach(({ex,exIdx})=>{html+=renderLogExCard(ex,state.sessionIdx,exIdx,prevWorkouts);});html+=`</div>`;}
       else{html+=renderLogExCard(group.ex,state.sessionIdx,group.exIdx,prevWorkouts);}
     });
-
     html+=`<button class="btn" style="margin-top:24px" onclick="finishSession('${program.id}','${state.dateKey}',${state.sessionIdx})">Finish ${sessionLabel}</button>`;
     body.innerHTML=html;
   }
 
-  function markMobBlockDone(){
-    mobBlocksDone['mob']='done';
-    // Re-render just the button
-    const btn=document.querySelector('.mob-block-done-btn');
-    if(btn){btn.textContent='✓ Mobility Complete';btn.classList.add('completed');btn.disabled=true;}
-  }
+  function markMobBlockDone(){mobBlocksDone['mob']='done';const btn=document.querySelector('.mob-block-done-btn');if(btn){btn.textContent='✓ Mobility Complete';btn.classList.add('completed');btn.disabled=true;}}
 
   function groupExercisesForLog(exercises){
     const groups=[],processed=new Set();
@@ -957,7 +1016,9 @@
     }
     program.completedWorkouts=(program.completedWorkouts||0)+1;
     await saveProgram(program);
-    await saveWorkout({id:'W'+Date.now(),date:dateKey,type:'gym',totalKg,name:(dayData?.name||'Workout')+(session.label?' — '+session.label:''),exercises:[]});
+    // ── Save with correct session type ──
+    const sessionType=session.type||'gym';
+    await saveWorkout({id:'W'+Date.now(),date:dateKey,type:sessionType,name:(dayData?.name||'Workout')+(session.label?' — '+session.label:''),totalKg,exercises:[]});
     activeLogState=null;mobBlocksDone={};renderProgramCard();renderTrainingStats();
     showSessionSummary(newPRs,totalKg,session,dayData);
   }
@@ -1100,8 +1161,8 @@
   // ── BUILDER ──
   let builderState={step:1,program:{name:'',focus:'Hypertrophy',description:'',startDate:'',totalWeeks:8,days:[]}};
   let activeDayKey=null,builderWeekOffset=0,pickerTargetSession=null;
-  // Mobility block builder state
   let mobPickerTarget=null,mobPickerSelected=[];
+  let editingExInSession=null; // {dk, si, ei} for inline edit
 
   function initBuilder(existing){
     if(existing){builderState.program=JSON.parse(JSON.stringify(existing));}
@@ -1140,10 +1201,116 @@
   function getDayData(dk){return builderState.program.days.find(d=>d.dateKey===dk)||null;}
   function ensureDayData(dk){let day=getDayData(dk);if(!day){const dow=dayOfWeek(dk);day={id:'D'+Date.now(),dateKey:dk,name:DAY_NAMES[dow]+' '+parseInt(dk.split('-')[2]),sessions:[]};builderState.program.days.push(day);}return day;}
 
+  // ── AUTO-REPEAT: copy week 1 structure from a given week onwards ──
+  function repeatWeekFromOnwards(fromWeekIdx){
+    const p=builderState.program;
+    const allDates=getCalendarDates();
+    // Get Week 1 template days (week 0)
+    const week1Dates=allDates.slice(0,7);
+    const week1Days=week1Dates.map(dk=>getDayData(dk)).filter(Boolean);
+    if(week1Days.length===0){alert('Build at least one session in Week 1 first.');return;}
+
+    // Get the day-of-week pattern from Week 1
+    const week1Pattern=week1Days.map(day=>{
+      const dow=dayOfWeek(day.dateKey);
+      return {dow,sessions:JSON.parse(JSON.stringify(day.sessions))};
+    });
+
+    // Apply to all weeks from fromWeekIdx onwards
+    for(let w=fromWeekIdx;w<p.totalWeeks;w++){
+      const weekDates=allDates.slice(w*7,(w+1)*7);
+      week1Pattern.forEach(template=>{
+        // Find matching day of week in this week
+        const targetDate=weekDates.find(dk=>dayOfWeek(dk)===template.dow);
+        if(!targetDate)return;
+        // Remove existing day if it exists
+        p.days=p.days.filter(d=>d.dateKey!==targetDate);
+        // Add new day copied from Week 1
+        const newDay={
+          id:'D'+Date.now()+Math.random(),
+          dateKey:targetDate,
+          name:DAY_NAMES[template.dow]+' '+parseInt(targetDate.split('-')[2]),
+          sessions:JSON.parse(JSON.stringify(template.sessions))
+        };
+        p.days.push(newDay);
+      });
+    }
+    renderStep2(document.getElementById('builder-body'));
+  }
+
+  // ── SWAP EXERCISE FROM WEEK X ONWARDS ──
+  function openSwapExercise(dk,si,ei){
+    const day=getDayData(dk);if(!day)return;
+    const session=day.sessions[si];
+    const ex=session.exercises[ei];
+    const exData=getExercises().find(e=>e.id===ex.exId);
+    if(!exData)return;
+    // Which week is this day in?
+    const allDates=getCalendarDates();
+    const weekIdx=Math.floor(allDates.indexOf(dk)/7);
+    const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
+    box.innerHTML=`<div class="modal-title">Swap Exercise</div>
+      <div style="font-size:13px;color:#888;margin-bottom:4px">Currently: <strong style="color:#fff">${exData.name}</strong></div>
+      <div style="font-size:12px;color:#FFAA32;margin-bottom:16px">Will replace from Week ${weekIdx+1} onwards on ${DAY_NAMES[dayOfWeek(dk)]}s in session "${session.label||'Session '+(si+1)}"</div>
+      <input class="picker-search" type="text" placeholder="Search exercises..." id="swap-search" oninput="renderSwapList(this.value,'${dk}',${si},${ei})">
+      <div id="swap-list"></div>
+      <button class="btn" style="background:#3a3a3a;color:#888;margin-top:8px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;
+    modal.style.display='flex';
+    renderSwapList('',dk,si,ei);
+  }
+
+  function renderSwapList(search,dk,si,ei){
+    const exercises=getExercises().filter(e=>CATEGORIES.includes(e.category));
+    const filtered=exercises.filter(e=>e.name.toLowerCase().includes(search.toLowerCase()));
+    const grouped={};CATEGORIES.forEach(cat=>{const catEx=filtered.filter(e=>e.category===cat);if(catEx.length>0)grouped[cat]=catEx;});
+    let html='';Object.entries(grouped).forEach(([cat,exs])=>{html+=`<div class="picker-cat-label">${cat}</div>`;exs.forEach(e=>{html+=`<div class="picker-exercise-row" onclick="confirmSwapExercise('${dk}',${si},${ei},'${e.id}')"><div><div class="picker-ex-name">${e.name}</div></div><span style="color:#FFAA32;font-size:18px">→</span></div>`;});});
+    if(!html)html=`<div style="color:#555;font-size:13px;padding:12px 0">No exercises found</div>`;
+    const el=document.getElementById('swap-list');if(el)el.innerHTML=html;
+  }
+
+  function confirmSwapExercise(dk,si,ei,newExId){
+    const allDates=getCalendarDates();
+    const weekIdx=Math.floor(allDates.indexOf(dk)/7);
+    const dow=dayOfWeek(dk);
+    const p=builderState.program;
+    const sourceSession=getDayData(dk)?.sessions[si];
+    if(!sourceSession)return;
+    const oldExId=sourceSession.exercises[ei].exId;
+
+    // Apply swap from weekIdx onwards
+    for(let w=weekIdx;w<p.totalWeeks;w++){
+      const weekDates=allDates.slice(w*7,(w+1)*7);
+      const targetDate=weekDates.find(d=>dayOfWeek(d)===dow);
+      if(!targetDate)continue;
+      const targetDay=getDayData(targetDate);
+      if(!targetDay)continue;
+      const targetSession=targetDay.sessions[si];
+      if(!targetSession)continue;
+      // Find exercise with same exId
+      const exIdx=targetSession.exercises.findIndex(e=>e.exId===oldExId);
+      if(exIdx>-1){
+        targetSession.exercises[exIdx]={...targetSession.exercises[exIdx],exId:newExId};
+      }
+    }
+    document.getElementById('exercise-modal').style.display='none';
+    renderDayBody();
+  }
+
   function renderStep2(body){
     const p=builderState.program,tw=p.totalWeeks;
     const wd=getWeekDates(builderWeekOffset);
-    let html=`<div style="font-size:13px;color:#888;margin-bottom:12px">Tap a day to add sessions. Blue dot = has content.</div><div class="week-nav"><button class="week-nav-btn" onclick="changeBuilderWeek(-1)" ${builderWeekOffset===0?'disabled style="opacity:0.3"':''}>← Prev</button><div style="font-size:13px;color:#888">Week ${builderWeekOffset+1} of ${tw}</div><button class="week-nav-btn" onclick="changeBuilderWeek(1)" ${builderWeekOffset>=tw-1?'disabled style="opacity:0.3"':''}>Next →</button></div><div class="week-grid">`;
+    const hasWeek1Content=getCalendarDates().slice(0,7).some(dk=>getDayData(dk)!==null);
+
+    let html=`<div style="font-size:13px;color:#888;margin-bottom:12px">Tap a day to add sessions. Blue dot = has content.</div>`;
+
+    // ── Auto-repeat banner ──
+    if(hasWeek1Content&&builderWeekOffset===0){
+      html+=`<div class="repeat-week-banner"><p>Week 1 has content. Copy it across all remaining weeks?</p><button class="btn" style="background:#4A9EFF" onclick="repeatWeekFromOnwards(1)">Repeat Week 1 → All Weeks</button></div>`;
+    } else if(hasWeek1Content&&builderWeekOffset>0){
+      html+=`<div class="repeat-week-banner" style="background:rgba(255,170,50,0.06);border-color:rgba(255,170,50,0.2)"><p style="color:#888">Apply Week 1 template from this week onwards?</p><button class="btn" style="background:#FFAA32;color:#111" onclick="repeatWeekFromOnwards(${builderWeekOffset})">Apply from Week ${builderWeekOffset+1} Onwards</button></div>`;
+    }
+
+    html+=`<div class="week-nav"><button class="week-nav-btn" onclick="changeBuilderWeek(-1)" ${builderWeekOffset===0?'disabled style="opacity:0.3"':''}>← Prev</button><div style="font-size:13px;color:#888">Week ${builderWeekOffset+1} of ${tw}</div><button class="week-nav-btn" onclick="changeBuilderWeek(1)" ${builderWeekOffset>=tw-1?'disabled style="opacity:0.3"':''}>Next →</button></div><div class="week-grid">`;
     wd.forEach(dk=>{
       const dow=dayOfWeek(dk),dd=getDayData(dk);
       const ex=dd?dd.sessions.reduce((s,se)=>s+(se.exercises?.length||0)+(se.mobilityBlock?1:0),0):0;
@@ -1166,9 +1333,22 @@
     if(!day||day.sessions.length===0){html+=`<div style="text-align:center;color:#555;font-size:13px;padding:12px 0">No sessions yet</div>`;}
     else{
       day.sessions.forEach((session,si)=>{
-        html+=`<div class="session-block"><div class="session-header"><input class="field-input" style="flex:1;padding:8px 12px;font-size:13px" type="text" placeholder="Session label e.g. AM — Uppers" value="${session.label||''}" onchange="updateCalSessionLabel('${activeDayKey}',${si},this.value)"><button class="session-delete-btn" onclick="deleteCalSession('${activeDayKey}',${si})">Remove</button></div>`;
+        // Session type buttons
+        const currentType=session.type||'gym';
+        const typeButtons=SESSION_TYPES.map(t=>{
+          const isActive=currentType===t.value;
+          const activeClass=isActive?(t.value==='gym'?'active':t.value==='swim'?'swim-active':t.value==='run'?'run-active':'mob-active'):'';
+          return `<button class="session-type-btn ${activeClass}" onclick="setSessionType('${activeDayKey}',${si},'${t.value}')">${t.label}</button>`;
+        }).join('');
 
-        // ── Mobility block (always first) ──
+        html+=`<div class="session-block">
+          <div class="session-header">
+            <input class="field-input" style="flex:1;padding:8px 12px;font-size:13px" type="text" placeholder="Session label e.g. AM Uppers" value="${session.label||''}" onchange="updateCalSessionLabel('${activeDayKey}',${si},this.value)">
+            <button class="session-delete-btn" onclick="deleteCalSession('${activeDayKey}',${si})">Remove</button>
+          </div>
+          <div class="session-type-row">${typeButtons}</div>`;
+
+        // Mobility block first
         if(session.mobilityBlock){
           const mb=session.mobilityBlock;
           const exNames=mb.exercises.map(exId=>{const e=getExercises().find(e=>e.id===exId);return e?e.name:'';}).filter(Boolean);
@@ -1177,20 +1357,46 @@
           html+=`<button class="add-mob-block-btn" onclick="openMobBlockPicker('${activeDayKey}',${si})">🧘 + Add Mobility Block</button>`;
         }
 
-        // ── Regular exercises ──
-        const groups=groupBuilderExercises(session.exercises||[]);
+        // Exercises with reorder + edit + swap
+        const exercises=session.exercises||[];
+        const groups=groupBuilderExercises(exercises);
         groups.forEach(group=>{
           if(group.type==='superset'){
             html+=`<div class="superset-group"><div class="superset-label">Superset ${group.label}</div>`;
             group.indices.forEach((ei,pos)=>{
-              const ex=session.exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
-              html+=`<div class="session-exercise-row"><div style="flex:1"><span class="se-superset-badge">${group.label}${pos+1}</span><span class="se-name">${exData.name}</span><div class="se-prescription" style="margin-top:2px">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;gap:4px;align-items:center"><button onclick="unlinkSuperset('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#666;font-size:11px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button></div></div>`;
+              const ex=exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
+              html+=`<div class="session-exercise-row">
+                <div class="se-reorder-btns">
+                  <button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},-1)">▲</button>
+                  <button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},1)">▼</button>
+                </div>
+                <div style="flex:1"><span class="se-superset-badge">${group.label}${pos+1}</span><span class="se-name">${exData.name}</span><div class="se-prescription" style="margin-top:2px">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                  <button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>
+                  <button class="se-edit-btn" onclick="openEditExerciseInSession('${activeDayKey}',${si},${ei})">Edit</button>
+                  <button onclick="unlinkSuperset('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#555;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button>
+                </div>
+              </div>`;
             });
             html+=`</div>`;
           } else {
-            const ei=group.index;const ex=session.exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
-            const otherAvailable=(session.exercises||[]).some((e,idx)=>idx!==ei&&!e.supersetGroup);
-            html+=`<div class="session-exercise-row"><div style="flex:1"><div class="se-name">${exData.name}</div><div class="se-prescription">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>${otherAvailable?`<button class="link-superset-btn" onclick="openSupersetPicker('${activeDayKey}',${si},${ei})">Link superset</button>`:''}</div></div>`;
+            const ei=group.index;const ex=exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
+            const otherAvailable=exercises.some((e,idx)=>idx!==ei&&!e.supersetGroup);
+            const allDates=getCalendarDates();
+            const weekIdx=Math.floor(allDates.indexOf(activeDayKey)/7);
+            html+=`<div class="session-exercise-row">
+              <div class="se-reorder-btns">
+                <button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},-1)">▲</button>
+                <button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},1)">▼</button>
+              </div>
+              <div style="flex:1"><div class="se-name">${exData.name}</div><div class="se-prescription">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                <button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>
+                <button class="se-edit-btn" onclick="openEditExerciseInSession('${activeDayKey}',${si},${ei})">Edit</button>
+                ${weekIdx>0?`<button onclick="openSwapExercise('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#FFAA32;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Swap wk${weekIdx+1}→</button>`:''}
+                ${otherAvailable?`<button class="link-superset-btn" onclick="openSupersetPicker('${activeDayKey}',${si},${ei})">Superset</button>`:''}
+              </div>
+            </div>`;
           }
         });
 
@@ -1201,22 +1407,78 @@
     body.innerHTML=html;
   }
 
+  // ── INLINE EDIT EXERCISE IN SESSION ──
+  function openEditExerciseInSession(dk,si,ei){
+    const day=getDayData(dk);if(!day)return;
+    const ex=day.sessions[si].exercises[ei];
+    const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
+    const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
+    let fh='';
+    if(exData.unit==='duration'||exData.unit==='hyrox'){
+      fh=`<div class="field-label">Notes / Target</div><input class="field-input" id="edit-presc-notes" type="text" value="${ex.notes||''}">`;
+    } else {
+      fh=`<div class="sets-reps-row"><div style="flex:1"><div class="field-label">Sets</div><input class="field-input" id="edit-presc-sets" type="number" min="1" max="20" value="${ex.sets||4}"></div><div style="flex:1"><div class="field-label">Reps</div><input class="field-input" id="edit-presc-reps" type="number" min="1" max="100" value="${ex.reps||8}"></div></div><div class="field-label">Notes</div><input class="field-input" id="edit-presc-notes" type="text" value="${ex.notes||''}" placeholder="e.g. tempo, RPE">`;
+    }
+    box.innerHTML=`<div class="modal-title">Edit — ${exData.name}</div><div style="font-size:12px;color:#666;margin-bottom:16px">${unitLabel(exData.unit,exData.bwWeighted)}</div>${fh}<div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="saveEditExerciseInSession('${dk}',${si},${ei})">Save</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button></div>`;
+    modal.style.display='flex';
+  }
+
+  function saveEditExerciseInSession(dk,si,ei){
+    const day=getDayData(dk);if(!day)return;
+    const ex=day.sessions[si].exercises[ei];
+    const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
+    if(exData.unit==='duration'||exData.unit==='hyrox'){
+      ex.notes=document.getElementById('edit-presc-notes').value.trim();
+    } else {
+      ex.sets=parseInt(document.getElementById('edit-presc-sets').value)||4;
+      ex.reps=parseInt(document.getElementById('edit-presc-reps').value)||8;
+      ex.notes=document.getElementById('edit-presc-notes').value.trim();
+    }
+    document.getElementById('exercise-modal').style.display='none';
+    renderDayBody();
+  }
+
+  // ── MOVE EXERCISE UP/DOWN ──
+  function moveExercise(dk,si,ei,dir){
+    const day=getDayData(dk);if(!day)return;
+    const exercises=day.sessions[si].exercises;
+    const newIdx=ei+dir;
+    if(newIdx<0||newIdx>=exercises.length)return;
+    [exercises[ei],exercises[newIdx]]=[exercises[newIdx],exercises[ei]];
+    renderDayBody();
+  }
+
+  // ── SET SESSION TYPE ──
+  function setSessionType(dk,si,type){
+    const day=getDayData(dk);if(!day)return;
+    day.sessions[si].type=type;
+    renderDayBody();
+  }
+
+  function groupBuilderExercises(exercises){
+    const groups=[],processed=new Set();
+    exercises.forEach((ex,i)=>{
+      if(processed.has(i))return;
+      if(ex.supersetGroup){const indices=exercises.map((e,idx)=>e.supersetGroup===ex.supersetGroup?idx:-1).filter(idx=>idx>-1);indices.forEach(idx=>processed.add(idx));groups.push({type:'superset',label:ex.supersetGroup,indices});}
+      else{processed.add(i);groups.push({type:'standalone',index:i});}
+    });
+    return groups;
+  }
+
   // ── MOBILITY BLOCK PICKER ──
   function openMobBlockPicker(dk,si){
-    mobPickerTarget={dk,si};
-    mobPickerSelected=[];
+    mobPickerTarget={dk,si};mobPickerSelected=[];
     const mobExs=getExercises().filter(e=>e.category==='Mobility');
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
-    box.innerHTML=`
-      <div class="modal-title">Add Mobility Block</div>
+    box.innerHTML=`<div class="modal-title">Add Mobility Block</div>
       <div class="field-label">Block Name</div>
       <input class="field-input" id="mob-block-name" type="text" placeholder="e.g. Lower Focus, Surf Warm-up">
       <div class="field-label">Rounds</div>
       <input class="field-input" id="mob-block-rounds" type="number" min="1" max="5" value="1" style="max-width:100px">
       <div class="field-label" style="margin-top:16px">Select Exercises</div>
-      <div style="font-size:12px;color:#666;margin-bottom:8px">Tap to select — they'll appear in this order</div>
+      <div style="font-size:12px;color:#666;margin-bottom:8px">Tap to select — they appear in this order</div>
       <div id="mob-picker-list">
-        ${mobExs.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No mobility exercises in bank. Add some in Exercise Bank first.</div>':
+        ${mobExs.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No mobility exercises in bank. Add some first.</div>':
           mobExs.map(e=>`<div class="picker-exercise-row" id="mob-pick-${e.id}" onclick="toggleMobExercise('${e.id}')">
             <div><div class="picker-ex-name">${e.name}</div></div>
             <span id="mob-pick-tick-${e.id}" style="color:#666;font-size:18px">○</span>
@@ -1232,10 +1494,11 @@
 
   function toggleMobExercise(exId){
     const idx=mobPickerSelected.indexOf(exId);
-    if(idx>-1){mobPickerSelected.splice(idx,1);}else{mobPickerSelected.push(exId);}
-    // Update UI
-    mobPickerSelected.forEach(id=>{const t=document.getElementById('mob-pick-tick-'+id);if(t){t.textContent='✓';t.style.color='#FFC864';}});
-    getExercises().filter(e=>e.category==='Mobility').forEach(e=>{if(!mobPickerSelected.includes(e.id)){const t=document.getElementById('mob-pick-tick-'+e.id);if(t){t.textContent='○';t.style.color='#666';}}});
+    if(idx>-1)mobPickerSelected.splice(idx,1);else mobPickerSelected.push(exId);
+    getExercises().filter(e=>e.category==='Mobility').forEach(e=>{
+      const t=document.getElementById('mob-pick-tick-'+e.id);
+      if(t){t.textContent=mobPickerSelected.includes(e.id)?'✓':'○';t.style.color=mobPickerSelected.includes(e.id)?'#FFC864':'#666';}
+    });
     const cnt=document.getElementById('mob-selected-count');
     if(cnt)cnt.textContent=mobPickerSelected.length+' exercise'+(mobPickerSelected.length!==1?'s':'')+' selected';
   }
@@ -1247,26 +1510,13 @@
     const rounds=parseInt(document.getElementById('mob-block-rounds').value)||1;
     const{dk,si}=mobPickerTarget;
     ensureDayData(dk);
+    if(!getDayData(dk).sessions[si].exercises)getDayData(dk).sessions[si].exercises=[];
     getDayData(dk).sessions[si].mobilityBlock={name,rounds,exercises:[...mobPickerSelected]};
     document.getElementById('exercise-modal').style.display='none';
     renderDayBody();
   }
 
-  function removeMobilityBlock(dk,si){
-    const day=getDayData(dk);if(!day)return;
-    delete day.sessions[si].mobilityBlock;
-    renderDayBody();
-  }
-
-  function groupBuilderExercises(exercises){
-    const groups=[],processed=new Set();
-    exercises.forEach((ex,i)=>{
-      if(processed.has(i))return;
-      if(ex.supersetGroup){const indices=exercises.map((e,idx)=>e.supersetGroup===ex.supersetGroup?idx:-1).filter(idx=>idx>-1);indices.forEach(idx=>processed.add(idx));groups.push({type:'superset',label:ex.supersetGroup,indices});}
-      else{processed.add(i);groups.push({type:'standalone',index:i});}
-    });
-    return groups;
-  }
+  function removeMobilityBlock(dk,si){const day=getDayData(dk);if(!day)return;delete day.sessions[si].mobilityBlock;renderDayBody();}
 
   function openSupersetPicker(dk,si,ei){
     const day=getDayData(dk);if(!day)return;
@@ -1294,7 +1544,11 @@
     renderDayBody();
   }
 
-  function addCalSession(dk){ensureDayData(dk);getDayData(dk).sessions.push({id:'S'+Date.now(),label:'',exercises:[],mobilityBlock:null});renderStep2(document.getElementById('builder-body'));}
+  function addCalSession(dk){
+    ensureDayData(dk);
+    getDayData(dk).sessions.push({id:'S'+Date.now(),label:'',type:'gym',exercises:[],mobilityBlock:null});
+    renderStep2(document.getElementById('builder-body'));
+  }
   function deleteCalSession(dk,si){const day=getDayData(dk);if(!day)return;day.sessions.splice(si,1);if(day.sessions.length===0)builderState.program.days=builderState.program.days.filter(d=>d.dateKey!==dk);renderStep2(document.getElementById('builder-body'));}
   function updateCalSessionLabel(dk,si,val){const day=getDayData(dk);if(day)day.sessions[si].label=val;}
   function removeCalExercise(dk,si,ei){const day=getDayData(dk);if(!day)return;day.sessions[si].exercises.splice(ei,1);renderDayBody();}
