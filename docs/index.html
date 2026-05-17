@@ -243,6 +243,13 @@
     .prescription-ex-unit { font-size: 12px; color: #666; margin-bottom: 16px; }
     .sets-reps-row { display: flex; gap: 10px; }
 
+    /* Tick set logging */
+    .tick-set-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .tick-set-label { font-size: 13px; color: #888; width: 60px; flex-shrink: 0; }
+    .tick-set-reps { font-size: 13px; color: #aaa; flex: 1; }
+    .tick-set-btn { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #3a3a3a; background: none; color: #666; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; font-family: -apple-system, BlinkMacSystemFont, sans-serif; flex-shrink: 0; }
+    .tick-set-btn.ticked { background: rgba(80,200,120,0.15); border-color: #50C878; color: #50C878; }
+
     .phase-day-block { background: #222; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
     .phase-day-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; border-bottom: 1px solid #2a2a2a; }
     .phase-day-name { font-size: 15px; font-weight: 700; color: #fff; }
@@ -428,8 +435,8 @@
     <div id="home" class="page active">
       <div class="section-title">Training Stats</div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">Total Workouts</div><div class="stat-value" id="stat-total-workouts">0</div><div class="stat-unit">completed</div></div>
-        <div class="stat-card"><div class="stat-label">Total Weight Lifted</div><div class="stat-value" id="stat-total-kg">0<span class="stat-inline-unit">kg</span></div><div class="stat-unit">&nbsp;</div></div>
+        <div class="stat-card"><div class="stat-label">Workouts This Block</div><div class="stat-value" id="stat-total-workouts">0</div><div class="stat-unit">completed</div></div>
+        <div class="stat-card"><div class="stat-label">Block Volume</div><div class="stat-value" id="stat-total-kg">0<span class="stat-inline-unit">kg</span></div><div class="stat-unit">this program</div></div>
         <div class="stat-card"><div class="stat-label">Workouts This Month</div><div class="stat-value" id="stat-month-workouts">0</div><div class="stat-unit">completed</div></div>
         <div class="stat-card"><div class="stat-label">Missed Sessions</div><div class="stat-value" id="stat-missed">0</div><div class="stat-unit">this month</div></div>
       </div>
@@ -439,8 +446,7 @@
         <div class="insight-card"><div class="i-label">Volume vs Last Month</div><div class="i-value" id="insight-volume-trend">—</div><div class="i-sub" id="insight-volume-sub">calculating...</div></div>
       </div>
       <div class="insight-grid">
-        <div class="insight-card"><div class="i-label">Last Workout</div><div class="i-value" id="insight-last-workout">—</div><div class="i-sub" id="insight-last-workout-date">—</div></div>
-        <div class="insight-card"><div class="i-label">Most Recent PR</div><div class="i-value" id="insight-pr-name">—</div><div class="i-sub" id="insight-pr-weight">—</div></div>
+        <div class="insight-card" style="grid-column:span 2;"><div class="i-label">Last Workout</div><div class="i-value" id="insight-last-workout" style="font-size:16px">—</div></div>
       </div>
       <div class="insight-grid">
         <div class="insight-card" style="grid-column:span 2;">
@@ -664,20 +670,36 @@
     pts.forEach((p,i)=>{const isHigh=data[i]===max;const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',isHigh?'4':'2.5');c.setAttribute('fill','#4A9EFF');c.setAttribute('opacity',isHigh?'1':'0.5');g.appendChild(c);});
   }
 
+  // ── HOME STATS — block-based ──
   function renderTrainingStats(){
     const workouts=getWorkouts(),today=new Date();
-    document.getElementById('stat-total-workouts').textContent=workouts.length;
-    const totalKg=workouts.reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
-    document.getElementById('stat-total-kg').innerHTML=totalKg.toLocaleString()+'<span class="stat-inline-unit">kg</span>';
-    document.getElementById('stat-month-workouts').textContent=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
     const active=getPrograms().find(p=>p.status==='active');
+
+    // Workouts this block = completed sessions in active program
+    const cs=getCSN();
+    const blockWorkouts=active?cs.filter(c=>c.programId===active.id).length:0;
+    document.getElementById('stat-total-workouts').textContent=blockWorkouts;
+
+    // Block volume = sum of workouts within active program's date range
+    let blockKg=0;
+    if(active&&active.startDate){
+      const startDate=active.startDate;
+      const endDate=addDays(startDate,active.totalWeeks*7);
+      blockKg=workouts.filter(w=>w.date>=startDate&&w.date<=endDate).reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
+    }
+    document.getElementById('stat-total-kg').innerHTML=blockKg.toLocaleString()+'<span class="stat-inline-unit">kg</span>';
+
+    // Workouts this month — all workouts
+    document.getElementById('stat-month-workouts').textContent=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
+
+    // Missed sessions
     let missed=0;
     if(active&&active.totalWorkouts&&active.totalWeeks){const spw=Math.round(active.totalWorkouts/active.totalWeeks);const wd=Math.max(0,(active.currentWeek||1)-1);missed=Math.max(0,wd*spw-(active.completedWorkouts||0));}
     document.getElementById('stat-missed').textContent=missed;
   }
 
   function renderInsights(){
-    const workouts=getWorkouts(),prs=getPRs(),today=todayStr();
+    const workouts=getWorkouts(),today=todayStr();
     let streak=0,best=getBestStreak();
     for(let i=0;i<365;i++){const key=addDays(today,-i);if(workouts.some(w=>w.date===key))streak++;else if(i>0)break;}
     if(streak>best){best=streak;saveBestStreak(best);}
@@ -689,9 +711,10 @@
     const tEl=document.getElementById('insight-volume-trend'),tSub=document.getElementById('insight-volume-sub');
     if(lastVol===0){tEl.textContent='—';tEl.className='i-value';tSub.textContent='No data last month';}
     else{const pct=Math.round(((thisVol-lastVol)/lastVol)*100);tEl.textContent=(pct>=0?'+':'')+pct+'%';tEl.className='i-value '+(pct>=0?'positive':'negative');tSub.textContent='vs last month ('+lastVol.toLocaleString()+'kg)';}
+    // Last workout — name only, no date
     const sorted=[...workouts].sort((a,b)=>new Date(b.date)-new Date(a.date));
-    if(sorted.length>0){const last=sorted[0];const daysAgo=diffDays(last.date,today);document.getElementById('insight-last-workout').textContent=last.name||last.type;document.getElementById('insight-last-workout-date').textContent=daysAgo===0?'Today':daysAgo===1?'Yesterday':daysAgo+' days ago';}
-    if(prs.length>0){const recent=[...prs].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0))[0];document.getElementById('insight-pr-name').textContent=recent.exercise;document.getElementById('insight-pr-weight').textContent=recent.weight+'kg';}
+    if(sorted.length>0){document.getElementById('insight-last-workout').textContent=sorted[0].name||sorted[0].type||'—';}
+    else{document.getElementById('insight-last-workout').textContent='—';}
     document.getElementById('insight-days-since').textContent=diffDays(getStartDate(),today);
   }
 
@@ -796,6 +819,7 @@
 
   // ── ACTIVE PROGRAM ──
   let activeLogState=null,activeWeekOffset=0,mobBlocksDone={};
+  let tickState={}; // tracks which tick sets are ticked {sessionIdx_exIdx_setIdx: bool}
 
   function renderActiveProgram(){
     const body=document.getElementById('active-body');
@@ -910,7 +934,7 @@
   }
 
   let logData={};
-  function startSession(dateKey,sessionIdx){logData={};mobBlocksDone={};activeLogState={dateKey,sessionIdx};renderActiveProgram();}
+  function startSession(dateKey,sessionIdx){logData={};mobBlocksDone={};tickState={};activeLogState={dateKey,sessionIdx};renderActiveProgram();}
 
   function renderWorkoutLogger(program,state){
     const body=document.getElementById('active-body');
@@ -956,7 +980,19 @@
     const unit=exData.unit,sets=ex.sets||1;
     const prevBest=getPrevBest(ex.exId,ex.reps,prevWorkouts);
     let setsHtml='';
-    if(unit==='duration'||unit==='hyrox'){
+
+    if(unit==='tick'){
+      // ── TICK SET LOGGING ──
+      for(let s=0;s<sets;s++){
+        const key=`${sessionIdx}_${exIdx}_${s}`;
+        const isTicked=tickState[key]||false;
+        setsHtml+=`<div class="tick-set-row">
+          <div class="tick-set-label">Set ${s+1}</div>
+          <div class="tick-set-reps">${ex.reps} reps</div>
+          <button class="tick-set-btn ${isTicked?'ticked':''}" onclick="toggleTick('${sessionIdx}','${exIdx}','${s}',this)">${isTicked?'✓':''}</button>
+        </div>`;
+      }
+    } else if(unit==='duration'||unit==='hyrox'){
       const key=`${sessionIdx}_${exIdx}_0`;
       setsHtml=`<div class="log-set-row"><div class="log-set-label">Time</div><input class="log-set-input" style="width:120px" type="text" placeholder="mm:ss" value="${logData[key]||''}" oninput="logData['${key}']=this.value"><div class="log-set-unit">${unit==='hyrox'?'finish':'duration'}</div></div>`;
     } else {
@@ -967,7 +1003,15 @@
         setsHtml+=`<div class="log-set-row"><div class="log-set-label">Set ${s+1}</div><input class="log-set-input" type="${unit==='reptime'?'text':'number'}" step="${unit==='metres'?'0.01':'any'}" min="0" value="${logData[key]||''}" oninput="logData['${key}']=this.value;checkPRInput(this,'${exData.name}',parseFloat(this.value))"><div class="log-set-unit">${unitStr}</div>${prev?`<div class="log-set-prev">prev: ${prev}${unitStr}</div>`:''}</div>`;
       }
     }
-    return `<div class="log-exercise-card"><div style="margin-bottom:10px">${ex.supersetGroup?`<span class="se-superset-badge">${ex.supersetGroup}</span>`:''}<div class="log-ex-name">${exData.name}</div><div class="log-ex-prescribed">${formatPrescription(unit,ex)}</div>${ex.notes?`<div style="font-size:11px;color:#666;margin-top:2px">${ex.notes}</div>`:''}</div>${setsHtml}${prevBest?`<div style="font-size:11px;color:#555;margin-top:8px">Previous best: ${Math.max(...prevBest.map(Number).filter(v=>!isNaN(v)))||'—'}${unit==='kg'?'kg':unit==='metres'?'m':''}</div>`:''}</div>`;
+
+    return `<div class="log-exercise-card"><div style="margin-bottom:10px">${ex.supersetGroup?`<span class="se-superset-badge">${ex.supersetGroup}</span>`:''}<div class="log-ex-name">${exData.name}</div><div class="log-ex-prescribed">${formatPrescription(unit,ex)}</div>${ex.notes?`<div style="font-size:11px;color:#666;margin-top:2px">${ex.notes}</div>`:''}</div>${setsHtml}${unit!=='tick'&&prevBest?`<div style="font-size:11px;color:#555;margin-top:8px">Previous best: ${Math.max(...prevBest.map(Number).filter(v=>!isNaN(v)))||'—'}${unit==='kg'?'kg':unit==='metres'?'m':''}</div>`:''}</div>`;
+  }
+
+  function toggleTick(sessionIdx,exIdx,setIdx,btn){
+    const key=`${sessionIdx}_${exIdx}_${setIdx}`;
+    tickState[key]=!tickState[key];
+    if(tickState[key]){btn.textContent='✓';btn.classList.add('ticked');}
+    else{btn.textContent='';btn.classList.remove('ticked');}
   }
 
   function getPrevBest(exId,reps,prevWorkouts){
@@ -994,19 +1038,30 @@
     const newPRs=[];let totalKg=0;
     for(const [ei,ex] of (session.exercises||[]).entries()){
       const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)continue;
-      const sets=ex.sets||1;const setValues=[];
-      for(let s=0;s<sets;s++){const key=`${sessionIdx}_${ei}_${s}`;const val=parseFloat(logData[key]);if(!isNaN(val)){setValues.push(val);if(exData.unit==='kg')totalKg+=val*(ex.reps||1);}}
-      if(setValues.length>0){
-        const maxVal=Math.max(...setValues);
-        await saveCW({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:setValues,reps:ex.reps||null,maxVal});
-        const existing=getPRs().find(p=>p.exercise===exData.name);
-        if(!existing||maxVal>existing.weight){await savePR(exData.name,maxVal,dateKey);newPRs.push({name:exData.name,val:maxVal,unit:exData.unit==='kg'?'kg':exData.unit==='metres'?'m':''});}
+      const sets=ex.sets||1;
+
+      if(exData.unit==='tick'){
+        // Record tick completion — store 1 per ticked set
+        const tickedSets=Array.from({length:sets},(_,s)=>tickState[`${sessionIdx}_${ei}_${s}`]?1:0);
+        const anyTicked=tickedSets.some(v=>v===1);
+        if(anyTicked){
+          await saveCW({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:tickedSets,reps:ex.reps||null,maxVal:ex.reps||0});
+        }
+      } else {
+        const setValues=[];
+        for(let s=0;s<sets;s++){const key=`${sessionIdx}_${ei}_${s}`;const val=parseFloat(logData[key]);if(!isNaN(val)){setValues.push(val);if(exData.unit==='kg')totalKg+=val*(ex.reps||1);}}
+        if(setValues.length>0){
+          const maxVal=Math.max(...setValues);
+          await saveCW({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:setValues,reps:ex.reps||null,maxVal});
+          const existing=getPRs().find(p=>p.exercise===exData.name);
+          if(!existing||maxVal>existing.weight){await savePR(exData.name,maxVal,dateKey);newPRs.push({name:exData.name,val:maxVal,unit:exData.unit==='kg'?'kg':exData.unit==='metres'?'m':''});}
+        }
       }
     }
     program.completedWorkouts=(program.completedWorkouts||0)+1;
     await saveProgram(program);
     await saveWorkout({id:'W'+Date.now(),date:dateKey,type:session.type||'gym',name:(dayData?.name||'Workout')+(session.label?' — '+session.label:''),totalKg,exercises:[]});
-    activeLogState=null;mobBlocksDone={};renderProgramCard();renderTrainingStats();
+    activeLogState=null;mobBlocksDone={};tickState={};renderProgramCard();renderTrainingStats();
     showSessionSummary(newPRs,totalKg,session,dayData);
   }
 
@@ -1027,7 +1082,7 @@
     CATS.forEach(cat=>{
       const catExs=exercises.filter(e=>e.category===cat).sort((a,b)=>a.name.localeCompare(b.name));if(catExs.length===0)return;
       const catId='hcat-'+cat.replace(/\s/g,'');
-      html+=`<div class="history-cat-block"><div class="history-cat-header" onclick="toggleHistoryCat('${catId}')"><div class="history-cat-name">${cat}</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#666">${catExs.length} exercises</span><span style="color:#666;font-size:12px" id="chev-${catId}">▼</span></div></div><div class="history-cat-exercises" id="${catId}">${catExs.map(ex=>{const logs=cw.filter(w=>w.exId===ex.id);const bestVal=logs.length>0?Math.max(...logs.map(l=>l.maxVal||0)):null;return `<div class="history-ex-row" onclick="historyExId='${ex.id}';historyView='detail';renderExerciseHistory()"><div><div class="history-ex-name">${ex.name}</div>${bestVal?`<div class="history-ex-best">Best: ${bestVal}${ex.unit==='kg'?'kg':ex.unit==='metres'?'m':''}</div>`:`<div class="history-ex-best" style="color:#555">No data yet</div>`}</div><div style="color:#666;font-size:16px">›</div></div>`;}).join('')}</div></div>`;
+      html+=`<div class="history-cat-block"><div class="history-cat-header" onclick="toggleHistoryCat('${catId}')"><div class="history-cat-name">${cat}</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#666">${catExs.length} exercises</span><span style="color:#666;font-size:12px" id="chev-${catId}">▼</span></div></div><div class="history-cat-exercises" id="${catId}">${catExs.map(ex=>{const logs=cw.filter(w=>w.exId===ex.id);const bestVal=logs.length>0?Math.max(...logs.map(l=>l.maxVal||0)):null;return `<div class="history-ex-row" onclick="historyExId='${ex.id}';historyView='detail';renderExerciseHistory()"><div><div class="history-ex-name">${ex.name}</div>${bestVal?`<div class="history-ex-best">Best: ${bestVal}${ex.unit==='kg'?'kg':ex.unit==='metres'?'m':ex.unit==='tick'?' sets completed':''}</div>`:`<div class="history-ex-best" style="color:#555">No data yet</div>`}</div><div style="color:#666;font-size:16px">›</div></div>`;}).join('')}</div></div>`;
     });
     body.innerHTML=html;
   }
@@ -1043,7 +1098,16 @@
     cw.forEach(w=>{const reps=w.reps||'unknown';if(!repGroups[reps])repGroups[reps]=[];repGroups[reps].push(w);});
     let html=`<button class="detail-back-btn" onclick="historyView='list';renderExerciseHistory()">← Back</button><div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">${ex.name}</div><div style="font-size:13px;color:#888;margin-bottom:20px">${ex.category} &middot; ${unitLabel(ex.unit,ex.bwWeighted)}</div>`;
     if(Object.keys(repGroups).length===0){html+=`<div class="card"><p>No data logged yet.</p></div>`;}
-    else{
+    else if(ex.unit==='tick'){
+      // Show tick history differently
+      html+=`<div class="rep-range-card"><div class="rep-range-title">Completed Sets</div><div class="rep-range-history">`;
+      cw.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10).forEach(l=>{
+        const completed=(l.sets||[]).filter(v=>v===1).length;
+        const total=(l.sets||[]).length;
+        html+=`<div class="rep-range-log-row"><span>${dateDisplay(l.date,{day:'numeric',month:'short',year:'numeric'})}</span><span style="color:#50C878">${completed}/${total} sets ✓</span></div>`;
+      });
+      html+=`</div></div>`;
+    } else {
       Object.keys(repGroups).sort((a,b)=>{if(a==='unknown')return 1;if(b==='unknown')return -1;return parseInt(a)-parseInt(b);}).forEach(reps=>{
         const logs=repGroups[reps].sort((a,b)=>new Date(b.date)-new Date(a.date));
         const allMax=logs.map(l=>l.maxVal||Math.max(...(l.sets||[0]))).filter(v=>!isNaN(v));
@@ -1076,6 +1140,7 @@
     if(unit==='reptime')return 'Sets × Reps × time per rep';
     if(unit==='duration')return 'Duration only — single finish time';
     if(unit==='hyrox')return 'Descriptive structure + finish time';
+    if(unit==='tick')return 'Sets × Reps — Tick off each set';
     return unit;
   }
 
@@ -1102,7 +1167,15 @@
   function updateUnitPreview(){
     const unit=document.getElementById('ex-unit').value;
     document.getElementById('bw-toggle-row').style.display=unit==='bw'?'block':'none';
-    const previews={'kg':'In the program: 4×6. When logging: each set records kg.','bw':'In the program: 4×10. When logging: each set confirms reps.','metres':'In the program: 4×5. When logging: each set records metres.','reptime':'In the program: 3×10. When logging: each rep records a time.','duration':'Target time noted. When logging: single finish time.','hyrox':'Workout structure described. When logging: single finish time.'};
+    const previews={
+      'kg':'In the program: 4×6. When logging: each set records kg.',
+      'bw':'In the program: 4×10. When logging: each set confirms reps.',
+      'metres':'In the program: 4×5. When logging: each set records metres.',
+      'reptime':'In the program: 3×10. When logging: each rep records a time.',
+      'duration':'Target time noted. When logging: single finish time.',
+      'hyrox':'Workout structure described. When logging: single finish time.',
+      'tick':'In the program: 3×30. When logging: tap ✓ to tick off each set. No numbers needed.'
+    };
     document.getElementById('unit-preview').textContent=previews[unit]||'';
   }
 
@@ -1110,7 +1183,24 @@
   function openAddExercise(id,pN,pC){
     editingExerciseId=id;
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
-    box.innerHTML=`<div class="modal-title">${id?'Edit Exercise':'Add Exercise'}</div><div class="field-label">Exercise Name</div><input class="field-input" id="ex-name" type="text" placeholder="e.g. Bench Press"><div class="field-label">Category</div><select class="field-input" id="ex-category">${ALL_CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('')}</select><div class="field-label">Recording Format</div><select class="field-input" id="ex-unit" onchange="updateUnitPreview()"><option value="kg">Sets × Reps × Weight (kg)</option><option value="bw">Sets × Reps — Bodyweight</option><option value="metres">Sets × Reps × Distance (metres)</option><option value="reptime">Sets × Reps × Time per rep</option><option value="duration">Duration only</option><option value="hyrox">Hyrox — descriptive + finish time</option></select><div class="unit-preview" id="unit-preview">In the program: 4×6. When logging: each set records kg.</div><div id="bw-toggle-row" style="display:none"><div class="field-label">Bodyweight Options</div><div class="toggle-row"><div><label style="color:#fff">Allow added weight</label><div style="font-size:12px;color:#666;margin-top:2px">e.g. weighted pull ups</div></div><label class="toggle-switch"><input type="checkbox" id="ex-bw-weighted"><span class="toggle-slider"></span></label></div></div><div class="field-label">Description <span style="color:#666;font-weight:400">(optional)</span></div><textarea class="field-input" id="ex-description" rows="3" placeholder="Notes on form..."></textarea><div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="saveExerciseBtn()">Save Exercise</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="closeExerciseModal()">Cancel</button></div>`;
+    box.innerHTML=`<div class="modal-title">${id?'Edit Exercise':'Add Exercise'}</div>
+      <div class="field-label">Exercise Name</div><input class="field-input" id="ex-name" type="text" placeholder="e.g. Pogo Jumps">
+      <div class="field-label">Category</div><select class="field-input" id="ex-category">${ALL_CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+      <div class="field-label">Recording Format</div>
+      <select class="field-input" id="ex-unit" onchange="updateUnitPreview()">
+        <option value="kg">Sets × Reps × Weight (kg)</option>
+        <option value="bw">Sets × Reps — Bodyweight</option>
+        <option value="tick">Sets × Reps — Tick off ✓</option>
+        <option value="metres">Sets × Reps × Distance (metres)</option>
+        <option value="reptime">Sets × Reps × Time per rep</option>
+        <option value="duration">Duration only</option>
+        <option value="hyrox">Hyrox — descriptive + finish time</option>
+      </select>
+      <div class="unit-preview" id="unit-preview">In the program: 4×6. When logging: each set records kg.</div>
+      <div id="bw-toggle-row" style="display:none"><div class="field-label">Bodyweight Options</div><div class="toggle-row"><div><label style="color:#fff">Allow added weight</label><div style="font-size:12px;color:#666;margin-top:2px">e.g. weighted pull ups</div></div><label class="toggle-switch"><input type="checkbox" id="ex-bw-weighted"><span class="toggle-slider"></span></label></div></div>
+      <div class="field-label">Description <span style="color:#666;font-weight:400">(optional)</span></div>
+      <textarea class="field-input" id="ex-description" rows="3" placeholder="Notes on form..."></textarea>
+      <div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="saveExerciseBtn()">Save Exercise</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="closeExerciseModal()">Cancel</button></div>`;
     if(id){const ex=getExercises().find(e=>e.id===id);if(ex){document.getElementById('ex-name').value=ex.name;document.getElementById('ex-category').value=ex.category;document.getElementById('ex-unit').value=ex.unit;document.getElementById('ex-bw-weighted').checked=ex.bwWeighted||false;document.getElementById('ex-description').value=ex.description||'';}}
     else{if(pN)document.getElementById('ex-name').value=pN;if(pC)document.getElementById('ex-category').value=pC;}
     updateUnitPreview();modal.style.display='flex';
@@ -1448,6 +1538,7 @@
   function formatPrescription(unit,ex){
     if(unit==='kg')return `${ex.sets} sets × ${ex.reps} reps × kg`;
     if(unit==='bw')return `${ex.sets} sets × ${ex.reps} reps — bodyweight`;
+    if(unit==='tick')return `${ex.sets} sets × ${ex.reps} reps — tick off`;
     if(unit==='metres')return `${ex.sets} sets × ${ex.reps} reps × metres`;
     if(unit==='reptime')return `${ex.sets} sets × ${ex.reps} reps × time`;
     if(unit==='duration')return `Target: ${ex.notes||'see notes'}`;
@@ -1476,17 +1567,23 @@
   function selectExerciseFromPicker(exId){
     const ex=getExercises().find(e=>e.id===exId);if(!ex)return;
     const box=document.getElementById('exercise-modal-box');
-    const fh=ex.unit==='duration'||ex.unit==='hyrox'
-      ?`<div class="field-label">Notes / Target</div><input class="field-input" id="presc-notes" type="text" placeholder="${ex.unit==='hyrox'?'Workout structure...':'Target e.g. sub 25:00'}">`
-      :`<div class="sets-reps-row"><div style="flex:1"><div class="field-label">Sets</div><input class="field-input" id="presc-sets" type="number" min="1" max="20" value="4"></div><div style="flex:1"><div class="field-label">Reps</div><input class="field-input" id="presc-reps" type="number" min="1" max="100" value="8"></div></div><div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div><input class="field-input" id="presc-notes" type="text" placeholder="e.g. tempo 3-1-1, RPE 8">`;
+    let fh='';
+    if(ex.unit==='duration'||ex.unit==='hyrox'){
+      fh=`<div class="field-label">Notes / Target</div><input class="field-input" id="presc-notes" type="text" placeholder="${ex.unit==='hyrox'?'Workout structure...':'Target e.g. sub 25:00'}">`;
+    } else if(ex.unit==='tick'){
+      fh=`<div class="sets-reps-row"><div style="flex:1"><div class="field-label">Sets</div><input class="field-input" id="presc-sets" type="number" min="1" max="20" value="3"></div><div style="flex:1"><div class="field-label">Reps per set</div><input class="field-input" id="presc-reps" type="number" min="1" max="200" value="30"></div></div><div style="font-size:12px;color:#888;margin-top:8px;padding:8px 12px;background:#1a1a1a;border-radius:8px">When logging: tap ✓ to tick off each set. No numbers needed.</div>`;
+    } else {
+      fh=`<div class="sets-reps-row"><div style="flex:1"><div class="field-label">Sets</div><input class="field-input" id="presc-sets" type="number" min="1" max="20" value="4"></div><div style="flex:1"><div class="field-label">Reps</div><input class="field-input" id="presc-reps" type="number" min="1" max="100" value="8"></div></div><div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div><input class="field-input" id="presc-notes" type="text" placeholder="e.g. tempo 3-1-1, RPE 8">`;
+    }
     box.innerHTML=`<div class="modal-title">Set Prescription</div><div class="prescription-ex-name">${ex.name}</div><div class="prescription-ex-unit">${unitLabel(ex.unit,ex.bwWeighted)}</div>${fh}<div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="savePrescription('${ex.id}')">Add to Session</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="openExercisePicker(pickerTargetSession.dk,pickerTargetSession.si)">Back</button></div>`;
   }
 
   function savePrescription(exId){
     const ex=getExercises().find(e=>e.id===exId);if(!ex)return;
     const entry={exId,sets:null,reps:null,notes:'',phases:[]};
-    if(ex.unit==='duration'||ex.unit==='hyrox'){entry.notes=document.getElementById('presc-notes').value.trim();}
-    else{entry.sets=parseInt(document.getElementById('presc-sets').value)||4;entry.reps=parseInt(document.getElementById('presc-reps').value)||8;entry.notes=document.getElementById('presc-notes').value.trim();}
+    if(ex.unit==='duration'||ex.unit==='hyrox'){entry.notes=document.getElementById('presc-notes')?.value.trim()||'';}
+    else if(ex.unit==='tick'){entry.sets=parseInt(document.getElementById('presc-sets').value)||3;entry.reps=parseInt(document.getElementById('presc-reps').value)||30;}
+    else{entry.sets=parseInt(document.getElementById('presc-sets').value)||4;entry.reps=parseInt(document.getElementById('presc-reps').value)||8;entry.notes=document.getElementById('presc-notes')?.value.trim()||'';}
     const{dk,si}=pickerTargetSession;ensureDayData(dk);
     if(!getDayData(dk).sessions[si].exercises)getDayData(dk).sessions[si].exercises=[];
     getDayData(dk).sessions[si].exercises.push(entry);
@@ -1496,7 +1593,6 @@
   function openAddExerciseFromBuilder(){closePickerModal();window._afterExSave=()=>{if(pickerTargetSession)openExercisePicker(pickerTargetSession.dk,pickerTargetSession.si);};openAddExercise(null);}
   function closePickerModal(){document.getElementById('exercise-modal').style.display='none';}
 
-  // ── PHASES grouped by day/session ──
   function renderStep3(body){
     const weeks=builderState.program.totalWeeks;
     const dayMap=new Map();
@@ -1509,7 +1605,6 @@
       });
       if(sessions.length>0){const dow=dayOfWeek(day.dateKey);const key=DAY_NAMES[dow];if(!dayMap.has(key))dayMap.set(key,{dayName:key,sessions});}
     });
-
     let html=`<div style="font-size:13px;color:#888;margin-bottom:16px">Set week-by-week prescription changes. Tap a day to expand.</div>`;
     if(dayMap.size===0){html+=`<div class="card" style="text-align:center;color:#666"><p>No exercises with sets/reps to configure.</p></div>`;}
     else{
@@ -1520,6 +1615,7 @@
         sessions.forEach(({session,si,exs})=>{
           if(session.label)html+=`<div class="phase-session-label">${session.label}</div>`;
           exs.forEach(({ex,exData})=>{
+            if(exData.unit==='tick')return; // tick exercises don't need phase overrides
             const globalIdx=window._phaseExercises.length;
             window._phaseExercises.push({ex,exData});
             const phases=ex.phases||[];
@@ -1535,7 +1631,6 @@
     }
     html+=`<div class="builder-nav"><button class="btn-outline" onclick="builderBack()">Back</button><button class="btn" style="flex:1;margin-top:0" onclick="builderState.step=4;renderBuilder()">Next — Review</button></div>`;
     body.innerHTML=html;
-    // Auto-open first day
     const firstKey=dayMap.keys().next().value;
     if(firstKey){const id='phase-day-'+firstKey;const el=document.getElementById(id);if(el){el.classList.add('open');const chev=document.getElementById('chev-'+id);if(chev)chev.textContent='▲';}}
   }
@@ -1545,7 +1640,6 @@
   function removePhase(idx,pi){const{ex}=window._phaseExercises[idx];ex.phases.splice(pi,1);renderStep3(document.getElementById('builder-body'));}
   function updatePhase(idx,pi,field,val){const{ex}=window._phaseExercises[idx];ex.phases[pi][field]=parseInt(val)||1;}
 
-  // ── REVIEW — collapsible weeks ──
   function renderStep4(body){
     const p=builderState.program;
     const sf=dateDisplay(p.startDate,{day:'numeric',month:'long',year:'numeric'});
