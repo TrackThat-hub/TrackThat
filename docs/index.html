@@ -766,7 +766,7 @@
       if(counts.mobility>0)pills+=`<span class="activity-pill pill-mobility">🧘 ${counts.mobility}x mobility</span>`;
       if(counts.hyrox>0)pills+=`<span class="activity-pill pill-hyrox">⚡ ${counts.hyrox}x hyrox</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      const firstDayInRow=w.find(d=>d!==null);const weekNum=firstDayInRow?Math.ceil(firstDayInRow/7):wi+1;
+      const weekNum=wi+1;
       row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
@@ -802,7 +802,7 @@
       if(counts.mindfulness>0)pills+=`<span class="activity-pill pill-mindfulness">🌬️ ${counts.mindfulness}x mindfulness</span>`;
       if(counts.sports>0)pills+=`<span class="activity-pill pill-sports">🏅 ${counts.sports}x sports</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      const firstDayInRow=w.find(d=>d!==null);const weekNum=firstDayInRow?Math.ceil(firstDayInRow/7):wi+1;
+      const weekNum=wi+1;
       row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
