@@ -738,7 +738,7 @@
     const workouts=getWorkouts(),now=new Date(),year=now.getFullYear(),month=now.getMonth();
     const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('calendar-month-title').textContent=mn[month]+' '+year;
-    const dim=new Date(year,month+1,0).getDate(),firstDay=(new Date(year,month,1).getDay()+6)%7;
+    const dim=new Date(year,month+1,0).getDate(),firstDay=new Date(year,month,1).getDay();
     const weeks=[];let week=[];
     for(let i=0;i<firstDay;i++)week.push(null);
     for(let d=1;d<=dim;d++){week.push(d);if(week.length===7){weeks.push(week);week=[];}}
@@ -766,7 +766,7 @@
       if(counts.mobility>0)pills+=`<span class="activity-pill pill-mobility">🧘 ${counts.mobility}x mobility</span>`;
       if(counts.hyrox>0)pills+=`<span class="activity-pill pill-hyrox">⚡ ${counts.hyrox}x hyrox</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      const weekNum=wi+1;
+      const firstDayInRow=w.find(d=>d!==null);const weekNum=firstDayInRow?Math.ceil(firstDayInRow/7):wi+1;
       row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
@@ -777,7 +777,7 @@
     const now=new Date(),year=now.getFullYear(),month=now.getMonth();
     const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('life-calendar-month-title').textContent=mn[month]+' '+year;
-    const dim=new Date(year,month+1,0).getDate(),firstDay=(new Date(year,month,1).getDay()+6)%7;
+    const dim=new Date(year,month+1,0).getDate(),firstDay=new Date(year,month,1).getDay();
     const weeks=[];let week=[];
     for(let i=0;i<firstDay;i++)week.push(null);
     for(let d=1;d<=dim;d++){week.push(d);if(week.length===7){weeks.push(week);week=[];}}
@@ -802,7 +802,7 @@
       if(counts.mindfulness>0)pills+=`<span class="activity-pill pill-mindfulness">🌬️ ${counts.mindfulness}x mindfulness</span>`;
       if(counts.sports>0)pills+=`<span class="activity-pill pill-sports">🏅 ${counts.sports}x sports</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      const weekNum=wi+1;
+      const firstDayInRow=w.find(d=>d!==null);const weekNum=firstDayInRow?Math.ceil(firstDayInRow/7):wi+1;
       row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
