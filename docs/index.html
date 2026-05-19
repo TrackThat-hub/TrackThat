@@ -243,7 +243,6 @@
     .prescription-ex-unit { font-size: 12px; color: #666; margin-bottom: 16px; }
     .sets-reps-row { display: flex; gap: 10px; }
 
-    /* Tick set logging */
     .tick-set-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
     .tick-set-label { font-size: 13px; color: #888; width: 60px; flex-shrink: 0; }
     .tick-set-reps { font-size: 13px; color: #aaa; flex: 1; }
@@ -670,17 +669,12 @@
     pts.forEach((p,i)=>{const isHigh=data[i]===max;const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',isHigh?'4':'2.5');c.setAttribute('fill','#4A9EFF');c.setAttribute('opacity',isHigh?'1':'0.5');g.appendChild(c);});
   }
 
-  // ── HOME STATS — block-based ──
   function renderTrainingStats(){
     const workouts=getWorkouts(),today=new Date();
     const active=getPrograms().find(p=>p.status==='active');
-
-    // Workouts this block = completed sessions in active program
     const cs=getCSN();
     const blockWorkouts=active?cs.filter(c=>c.programId===active.id).length:0;
     document.getElementById('stat-total-workouts').textContent=blockWorkouts;
-
-    // Block volume = sum of workouts within active program's date range
     let blockKg=0;
     if(active&&active.startDate){
       const startDate=active.startDate;
@@ -688,11 +682,7 @@
       blockKg=workouts.filter(w=>w.date>=startDate&&w.date<=endDate).reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
     }
     document.getElementById('stat-total-kg').innerHTML=blockKg.toLocaleString()+'<span class="stat-inline-unit">kg</span>';
-
-    // Workouts this month — all workouts
     document.getElementById('stat-month-workouts').textContent=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===today.getMonth()&&d.getFullYear()===today.getFullYear();}).length;
-
-    // Missed sessions
     let missed=0;
     if(active&&active.totalWorkouts&&active.totalWeeks){const spw=Math.round(active.totalWorkouts/active.totalWeeks);const wd=Math.max(0,(active.currentWeek||1)-1);missed=Math.max(0,wd*spw-(active.completedWorkouts||0));}
     document.getElementById('stat-missed').textContent=missed;
@@ -711,7 +701,6 @@
     const tEl=document.getElementById('insight-volume-trend'),tSub=document.getElementById('insight-volume-sub');
     if(lastVol===0){tEl.textContent='—';tEl.className='i-value';tSub.textContent='No data last month';}
     else{const pct=Math.round(((thisVol-lastVol)/lastVol)*100);tEl.textContent=(pct>=0?'+':'')+pct+'%';tEl.className='i-value '+(pct>=0?'positive':'negative');tSub.textContent='vs last month ('+lastVol.toLocaleString()+'kg)';}
-    // Last workout — name only, no date
     const sorted=[...workouts].sort((a,b)=>new Date(b.date)-new Date(a.date));
     if(sorted.length>0){document.getElementById('insight-last-workout').textContent=sorted[0].name||sorted[0].type||'—';}
     else{document.getElementById('insight-last-workout').textContent='—';}
@@ -777,7 +766,8 @@
       if(counts.mobility>0)pills+=`<span class="activity-pill pill-mobility">🧘 ${counts.mobility}x mobility</span>`;
       if(counts.hyrox>0)pills+=`<span class="activity-pill pill-hyrox">⚡ ${counts.hyrox}x hyrox</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      const firstDay=w.find(d=>d!==null);const weekNum=firstDay?Math.ceil(firstDay/7):wi+1; row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
+      const firstDayInRow=w.find(d=>d!==null);const weekNum=firstDayInRow?Math.ceil(firstDayInRow/7):wi+1;
+      row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
   }
@@ -812,14 +802,14 @@
       if(counts.mindfulness>0)pills+=`<span class="activity-pill pill-mindfulness">🌬️ ${counts.mindfulness}x mindfulness</span>`;
       if(counts.sports>0)pills+=`<span class="activity-pill pill-sports">🏅 ${counts.sports}x sports</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      const firstDay=w.find(d=>d!==null);const weekNum=firstDay?Math.ceil(firstDay/7):wi+1; row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
+      const firstDayInRow=w.find(d=>d!==null);const weekNum=firstDayInRow?Math.ceil(firstDayInRow/7):wi+1;
+      row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
   }
 
-  // ── ACTIVE PROGRAM ──
   let activeLogState=null,activeWeekOffset=0,mobBlocksDone={};
-  let tickState={}; // tracks which tick sets are ticked {sessionIdx_exIdx_setIdx: bool}
+  let tickState={};
 
   function renderActiveProgram(){
     const body=document.getElementById('active-body');
@@ -837,13 +827,11 @@
     const viewWeekIndex=Math.max(0,Math.min(program.totalWeeks-1,currentWeekIndex+activeWeekOffset));
     const weekDays=Array.from({length:7},(_,i)=>addDays(startDate,viewWeekIndex*7+i));
     const isCurrentWeek=viewWeekIndex===currentWeekIndex;
-
     const weekNavHtml=`<div class="active-week-nav">
       <button class="active-week-nav-btn" ${viewWeekIndex===0?'disabled':''} onclick="activeWeekOffset--;renderActiveProgram()">← Prev</button>
       <div class="active-week-label">Week ${viewWeekIndex+1} of ${program.totalWeeks}${isCurrentWeek?' — This Week':''}</div>
       <button class="active-week-nav-btn" ${viewWeekIndex>=program.totalWeeks-1?'disabled':''} onclick="activeWeekOffset++;renderActiveProgram()">Next →</button>
     </div>`;
-
     let stripHtml=weekDays.map(dateKey=>{
       const d=dayOfWeek(dateKey);
       const dayData=program.days?.find(dd=>dd.dateKey===dateKey);
@@ -857,7 +845,6 @@
       if(!hasWorkout)cls+=' rest';
       return `<div class="${cls}" onclick="${hasWorkout?`selectActiveDay('${dateKey}')`:``}"><div class="wsd-name">${DAY_NAMES[d]}</div><div class="wsd-date">${parseInt(dateKey.split('-')[2])}</div>${allDone?'<div class="wsd-tick">✓</div>':hasWorkout?'<div class="wsd-dot"></div>':''}</div>`;
     }).join('');
-
     let nextHtml='';
     if(isCurrentWeek){
       let nextDay=null,nextSi=null;
@@ -878,7 +865,6 @@
         nextHtml=`<div class="card"><h2>🎉 Week complete!</h2><p>All sessions done. Come back next week.</p></div>`;
       }
     }
-
     let allSessionsHtml='';
     weekDays.forEach(dateKey=>{
       const dayData=program.days?.find(dd=>dd.dateKey===dateKey);
@@ -914,7 +900,6 @@
         </div>`;
       });
     });
-
     body.innerHTML=`<div class="section-title" style="margin-top:4px">${program.name}</div>
       <div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:${Math.round(((program.completedWorkouts||0)/program.totalWorkouts)*100)}%"></div></div>
       ${weekNavHtml}<div class="week-strip">${stripHtml}</div>
@@ -980,17 +965,11 @@
     const unit=exData.unit,sets=ex.sets||1;
     const prevBest=getPrevBest(ex.exId,ex.reps,prevWorkouts);
     let setsHtml='';
-
     if(unit==='tick'){
-      // ── TICK SET LOGGING ──
       for(let s=0;s<sets;s++){
         const key=`${sessionIdx}_${exIdx}_${s}`;
         const isTicked=tickState[key]||false;
-        setsHtml+=`<div class="tick-set-row">
-          <div class="tick-set-label">Set ${s+1}</div>
-          <div class="tick-set-reps">${ex.reps} reps</div>
-          <button class="tick-set-btn ${isTicked?'ticked':''}" onclick="toggleTick('${sessionIdx}','${exIdx}','${s}',this)">${isTicked?'✓':''}</button>
-        </div>`;
+        setsHtml+=`<div class="tick-set-row"><div class="tick-set-label">Set ${s+1}</div><div class="tick-set-reps">${ex.reps} reps</div><button class="tick-set-btn ${isTicked?'ticked':''}" onclick="toggleTick('${sessionIdx}','${exIdx}','${s}',this)">${isTicked?'✓':''}</button></div>`;
       }
     } else if(unit==='duration'||unit==='hyrox'){
       const key=`${sessionIdx}_${exIdx}_0`;
@@ -1003,7 +982,6 @@
         setsHtml+=`<div class="log-set-row"><div class="log-set-label">Set ${s+1}</div><input class="log-set-input" type="${unit==='reptime'?'text':'number'}" step="${unit==='metres'?'0.01':'any'}" min="0" value="${logData[key]||''}" oninput="logData['${key}']=this.value;checkPRInput(this,'${exData.name}',parseFloat(this.value))"><div class="log-set-unit">${unitStr}</div>${prev?`<div class="log-set-prev">prev: ${prev}${unitStr}</div>`:''}</div>`;
       }
     }
-
     return `<div class="log-exercise-card"><div style="margin-bottom:10px">${ex.supersetGroup?`<span class="se-superset-badge">${ex.supersetGroup}</span>`:''}<div class="log-ex-name">${exData.name}</div><div class="log-ex-prescribed">${formatPrescription(unit,ex)}</div>${ex.notes?`<div style="font-size:11px;color:#666;margin-top:2px">${ex.notes}</div>`:''}</div>${setsHtml}${unit!=='tick'&&prevBest?`<div style="font-size:11px;color:#555;margin-top:8px">Previous best: ${Math.max(...prevBest.map(Number).filter(v=>!isNaN(v)))||'—'}${unit==='kg'?'kg':unit==='metres'?'m':''}</div>`:''}</div>`;
   }
 
@@ -1039,14 +1017,10 @@
     for(const [ei,ex] of (session.exercises||[]).entries()){
       const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)continue;
       const sets=ex.sets||1;
-
       if(exData.unit==='tick'){
-        // Record tick completion — store 1 per ticked set
         const tickedSets=Array.from({length:sets},(_,s)=>tickState[`${sessionIdx}_${ei}_${s}`]?1:0);
         const anyTicked=tickedSets.some(v=>v===1);
-        if(anyTicked){
-          await saveCW({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:tickedSets,reps:ex.reps||null,maxVal:ex.reps||0});
-        }
+        if(anyTicked){await saveCW({exId:ex.exId,exerciseName:exData.name,date:dateKey,sets:tickedSets,reps:ex.reps||null,maxVal:ex.reps||0});}
       } else {
         const setValues=[];
         for(let s=0;s<sets;s++){const key=`${sessionIdx}_${ei}_${s}`;const val=parseFloat(logData[key]);if(!isNaN(val)){setValues.push(val);if(exData.unit==='kg')totalKg+=val*(ex.reps||1);}}
@@ -1071,7 +1045,6 @@
     body.innerHTML=`<div style="text-align:center;padding:30px 0 20px"><div style="font-size:48px;margin-bottom:12px">🏆</div><div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">Session Complete!</div><div style="font-size:14px;color:#888">${session.label||dayData?.name||'Great work'}</div></div>${prHtml}<div class="stat-grid"><div class="stat-card"><div class="stat-label">Volume</div><div class="stat-value">${totalKg.toLocaleString()}<span class="stat-inline-unit">kg</span></div></div><div class="stat-card"><div class="stat-label">PRs Set</div><div class="stat-value" style="color:#50C878">${newPRs.length}</div></div></div><button class="btn" style="margin-top:16px" onclick="activeWeekOffset=0;renderActiveProgram()">Back to Program</button>`;
   }
 
-  // ── HISTORY ──
   let historyView='list',historyExId=null;
   function renderExerciseHistory(){
     const body=document.getElementById('history-body');
@@ -1099,7 +1072,6 @@
     let html=`<button class="detail-back-btn" onclick="historyView='list';renderExerciseHistory()">← Back</button><div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">${ex.name}</div><div style="font-size:13px;color:#888;margin-bottom:20px">${ex.category} &middot; ${unitLabel(ex.unit,ex.bwWeighted)}</div>`;
     if(Object.keys(repGroups).length===0){html+=`<div class="card"><p>No data logged yet.</p></div>`;}
     else if(ex.unit==='tick'){
-      // Show tick history differently
       html+=`<div class="rep-range-card"><div class="rep-range-title">Completed Sets</div><div class="rep-range-history">`;
       cw.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10).forEach(l=>{
         const completed=(l.sets||[]).filter(v=>v===1).length;
@@ -1119,7 +1091,6 @@
     body.innerHTML=html;
   }
 
-  // ── DESIGNER ──
   function showDesignerSection(section,btn){
     document.querySelectorAll('.designer-section').forEach(s=>s.style.display='none');
     document.querySelectorAll('#designer .sub-btn').forEach(b=>b.classList.remove('active'));
@@ -1167,15 +1138,7 @@
   function updateUnitPreview(){
     const unit=document.getElementById('ex-unit').value;
     document.getElementById('bw-toggle-row').style.display=unit==='bw'?'block':'none';
-    const previews={
-      'kg':'In the program: 4×6. When logging: each set records kg.',
-      'bw':'In the program: 4×10. When logging: each set confirms reps.',
-      'metres':'In the program: 4×5. When logging: each set records metres.',
-      'reptime':'In the program: 3×10. When logging: each rep records a time.',
-      'duration':'Target time noted. When logging: single finish time.',
-      'hyrox':'Workout structure described. When logging: single finish time.',
-      'tick':'In the program: 3×30. When logging: tap ✓ to tick off each set. No numbers needed.'
-    };
+    const previews={'kg':'In the program: 4×6. When logging: each set records kg.','bw':'In the program: 4×10. When logging: each set confirms reps.','metres':'In the program: 4×5. When logging: each set records metres.','reptime':'In the program: 3×10. When logging: each rep records a time.','duration':'Target time noted. When logging: single finish time.','hyrox':'Workout structure described. When logging: single finish time.','tick':'In the program: 3×30. When logging: tap ✓ to tick off each set. No numbers needed.'};
     document.getElementById('unit-preview').textContent=previews[unit]||'';
   }
 
@@ -1234,7 +1197,6 @@
   async function deleteProgramBtn(id){if(!confirm('Delete this program?'))return;await deleteProgram(id);renderProgramsList();renderProgramCard();}
   function editProgram(id){const p=getPrograms().find(p=>p.id===id);showDesignerSection('builder',document.querySelectorAll('#designer .sub-btn')[2]);initBuilder(p);}
 
-  // ── BUILDER ──
   let builderState={step:1,program:{name:'',focus:'Hypertrophy',description:'',startDate:'',totalWeeks:8,days:[]}};
   let activeDayKey=null,builderWeekOffset=0,pickerTargetSession=null;
   let mobPickerTarget=null,mobPickerSelected=[];
@@ -1343,13 +1305,7 @@
     const hasWeek1=getCalendarDates().slice(0,7).some(dk=>getDayData(dk)!==null);
     let repeatHtml='';
     if(hasWeek1){
-      repeatHtml=`<div class="repeat-toggle-card">
-        <div class="repeat-toggle-top">
-          <div><div class="repeat-toggle-label">Repeat Week 1 across all weeks</div><div class="repeat-toggle-sub">Copies Week 1 sessions to Weeks 2–${tw}</div></div>
-          <label class="toggle-switch"><input type="checkbox" id="repeat-toggle" ${repeatApplied?'checked':''} onchange="toggleRepeatWeek()"><span class="toggle-slider"></span></label>
-        </div>
-        <div class="repeat-toggle-state ${repeatApplied?'on':'off'}">${repeatApplied?'✓ Week 1 repeated across all '+tw+' weeks — toggle off to undo':'Week 1 not yet repeated — toggle on to apply'}</div>
-      </div>`;
+      repeatHtml=`<div class="repeat-toggle-card"><div class="repeat-toggle-top"><div><div class="repeat-toggle-label">Repeat Week 1 across all weeks</div><div class="repeat-toggle-sub">Copies Week 1 sessions to Weeks 2–${tw}</div></div><label class="toggle-switch"><input type="checkbox" id="repeat-toggle" ${repeatApplied?'checked':''} onchange="toggleRepeatWeek()"><span class="toggle-slider"></span></label></div><div class="repeat-toggle-state ${repeatApplied?'on':'off'}">${repeatApplied?'✓ Week 1 repeated across all '+tw+' weeks — toggle off to undo':'Week 1 not yet repeated — toggle on to apply'}</div></div>`;
     }
     let html=`${repeatHtml}<div style="font-size:13px;color:#888;margin-bottom:12px">Tap a day to add sessions.</div><div class="week-nav"><button class="week-nav-btn" onclick="changeBuilderWeek(-1)" ${builderWeekOffset===0?'disabled style="opacity:0.3"':''}>← Prev</button><div style="font-size:13px;color:#888">Week ${builderWeekOffset+1} of ${tw}</div><button class="week-nav-btn" onclick="changeBuilderWeek(1)" ${builderWeekOffset>=tw-1?'disabled style="opacity:0.3"':''}>Next →</button></div><div class="week-grid">`;
     wd.forEach(dk=>{
@@ -1397,30 +1353,13 @@
             html+=`<div class="superset-group"><div class="superset-label">Superset ${group.label}</div>`;
             group.indices.forEach((ei,pos)=>{
               const ex=exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
-              html+=`<div class="session-exercise-row">
-                <div class="se-reorder-btns"><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},-1)">▲</button><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},1)">▼</button></div>
-                <div style="flex:1"><span class="se-superset-badge">${group.label}${pos+1}</span><span class="se-name">${exData.name}</span><div class="se-prescription" style="margin-top:2px">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div>
-                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-                  <button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>
-                  <button class="se-edit-btn" onclick="openEditExerciseInSession('${activeDayKey}',${si},${ei})">Edit</button>
-                  <button onclick="unlinkSuperset('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#555;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button>
-                </div>
-              </div>`;
+              html+=`<div class="session-exercise-row"><div class="se-reorder-btns"><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},-1)">▲</button><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},1)">▼</button></div><div style="flex:1"><span class="se-superset-badge">${group.label}${pos+1}</span><span class="se-name">${exData.name}</span><div class="se-prescription" style="margin-top:2px">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button><button class="se-edit-btn" onclick="openEditExerciseInSession('${activeDayKey}',${si},${ei})">Edit</button><button onclick="unlinkSuperset('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#555;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button></div></div>`;
             });
             html+=`</div>`;
           } else {
             const ei=group.index;const ex=exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
             const otherAvailable=exercises.some((e,idx)=>idx!==ei&&!e.supersetGroup);
-            html+=`<div class="session-exercise-row">
-              <div class="se-reorder-btns"><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},-1)">▲</button><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},1)">▼</button></div>
-              <div style="flex:1"><div class="se-name">${exData.name}</div><div class="se-prescription">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div>
-              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-                <button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button>
-                <button class="se-edit-btn" onclick="openEditExerciseInSession('${activeDayKey}',${si},${ei})">Edit</button>
-                ${weekIdx>0?`<button onclick="openSwapExercise('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#FFAA32;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Swap wk${weekIdx+1}→</button>`:''}
-                ${otherAvailable?`<button class="link-superset-btn" onclick="openSupersetPicker('${activeDayKey}',${si},${ei})">Superset</button>`:''}
-              </div>
-            </div>`;
+            html+=`<div class="session-exercise-row"><div class="se-reorder-btns"><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},-1)">▲</button><button class="se-reorder-btn" onclick="moveExercise('${activeDayKey}',${si},${ei},1)">▼</button></div><div style="flex:1"><div class="se-name">${exData.name}</div><div class="se-prescription">${formatPrescription(exData.unit,ex)}</div>${ex.notes?`<div class="se-notes">${ex.notes}</div>`:''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><button class="se-remove-btn" onclick="removeCalExercise('${activeDayKey}',${si},${ei})">×</button><button class="se-edit-btn" onclick="openEditExerciseInSession('${activeDayKey}',${si},${ei})">Edit</button>${weekIdx>0?`<button onclick="openSwapExercise('${activeDayKey}',${si},${ei})" style="background:none;border:none;color:#FFAA32;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Swap wk${weekIdx+1}→</button>`:''}${otherAvailable?`<button class="link-superset-btn" onclick="openSupersetPicker('${activeDayKey}',${si},${ei})">Superset</button>`:''}</div></div>`;
           }
         });
         html+=`<button class="add-exercise-btn" onclick="openExercisePicker('${activeDayKey}',${si})">+ Add Exercise</button></div>`;
@@ -1474,14 +1413,7 @@
     mobPickerTarget={dk,si};mobPickerSelected=[];
     const mobExs=getExercises().filter(e=>e.category==='Mobility');
     const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
-    box.innerHTML=`<div class="modal-title">Add Mobility Block</div>
-      <div class="field-label">Block Name</div><input class="field-input" id="mob-block-name" type="text" placeholder="e.g. Lower Focus">
-      <div class="field-label">Rounds</div><input class="field-input" id="mob-block-rounds" type="number" min="1" max="5" value="1" style="max-width:100px">
-      <div class="field-label" style="margin-top:16px">Select Exercises</div>
-      <div style="font-size:12px;color:#666;margin-bottom:8px">Tap to select</div>
-      <div id="mob-picker-list">${mobExs.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No mobility exercises in bank.</div>':mobExs.map(e=>`<div class="picker-exercise-row" id="mob-pick-${e.id}" onclick="toggleMobExercise('${e.id}')"><div><div class="picker-ex-name">${e.name}</div></div><span id="mob-pick-tick-${e.id}" style="color:#666;font-size:18px">○</span></div>`).join('')}</div>
-      <div id="mob-selected-count" style="font-size:12px;color:#FFC864;margin-top:8px">0 exercises selected</div>
-      <div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="saveMobBlock()">Add Block</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button></div>`;
+    box.innerHTML=`<div class="modal-title">Add Mobility Block</div><div class="field-label">Block Name</div><input class="field-input" id="mob-block-name" type="text" placeholder="e.g. Lower Focus"><div class="field-label">Rounds</div><input class="field-input" id="mob-block-rounds" type="number" min="1" max="5" value="1" style="max-width:100px"><div class="field-label" style="margin-top:16px">Select Exercises</div><div style="font-size:12px;color:#666;margin-bottom:8px">Tap to select</div><div id="mob-picker-list">${mobExs.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No mobility exercises in bank.</div>':mobExs.map(e=>`<div class="picker-exercise-row" id="mob-pick-${e.id}" onclick="toggleMobExercise('${e.id}')"><div><div class="picker-ex-name">${e.name}</div></div><span id="mob-pick-tick-${e.id}" style="color:#666;font-size:18px">○</span></div>`).join('')}</div><div id="mob-selected-count" style="font-size:12px;color:#FFC864;margin-top:8px">0 exercises selected</div><div style="display:flex;gap:10px;margin-top:16px"><button class="btn" style="flex:1" onclick="saveMobBlock()">Add Block</button><button class="btn" style="flex:1;background:#3a3a3a;color:#888" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button></div>`;
     modal.style.display='flex';
   }
 
@@ -1615,7 +1547,7 @@
         sessions.forEach(({session,si,exs})=>{
           if(session.label)html+=`<div class="phase-session-label">${session.label}</div>`;
           exs.forEach(({ex,exData})=>{
-            if(exData.unit==='tick')return; // tick exercises don't need phase overrides
+            if(exData.unit==='tick')return;
             const globalIdx=window._phaseExercises.length;
             window._phaseExercises.push({ex,exData});
             const phases=ex.phases||[];
@@ -1684,7 +1616,6 @@
     showDesignerSection('programs',document.querySelectorAll('#designer .sub-btn')[1]);renderProgramsList();
   }
 
-  // ── STL ──
   function showStlSection(section,btn){
     ['surfing','mobility','reading','mindfulness','sports'].forEach(s=>document.getElementById('stl-'+s).style.display='none');
     document.querySelectorAll('#stl .sub-btn').forEach(b=>b.classList.remove('active'));
@@ -1741,7 +1672,7 @@
   function renderMobExList(){const el=document.getElementById('mob-ex-list');if(!el)return;if(mobSessionExercises.length===0){el.innerHTML='';return;}el.innerHTML=mobSessionExercises.map((ex,i)=>{const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return '';return `<div class="mob-exercise-row"><div class="mob-ex-name">${exData.name}</div><div class="mob-fields"><div style="flex:1"><div class="field-label" style="margin-top:0">Sets</div><input class="field-input" style="padding:8px;text-align:center" type="number" min="1" value="${ex.sets||3}" onchange="mobSessionExercises[${i}].sets=parseInt(this.value)||1"></div><div style="flex:1"><div class="field-label" style="margin-top:0">Reps</div><input class="field-input" style="padding:8px;text-align:center" type="number" min="1" value="${ex.reps||10}" onchange="mobSessionExercises[${i}].reps=parseInt(this.value)||1"></div><div style="flex:2"><div class="field-label" style="margin-top:0">Notes</div><input class="field-input" style="padding:8px" type="text" placeholder="e.g. hold 30s" value="${ex.notes||''}" onchange="mobSessionExercises[${i}].notes=this.value"></div><button onclick="mobSessionExercises.splice(${i},1);renderMobExList()" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:0 4px;align-self:flex-end;padding-bottom:4px">×</button></div></div>`;}).join('');}
   function openMobExercisePicker(){const exercises=getExercises().filter(e=>e.category==='Mobility');const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');box.innerHTML=`<div class="modal-title">Add Mobility Exercise</div>${exercises.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No mobility exercises in bank.</div>':exercises.sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`<div class="picker-exercise-row" onclick="addMobExercise('${e.id}')"><div><div class="picker-ex-name">${e.name}</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>`).join('')}<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById('exercise-modal').style.display='none'">Cancel</button>`;modal.style.display='flex';}
   function addMobExercise(exId){mobSessionExercises.push({exId,sets:3,reps:10,notes:''});document.getElementById('exercise-modal').style.display='none';renderMobExList();}
-  async function saveStlMobility(){const m={id:'MOB'+Date.now(),date:document.getElementById('mob-date').value,type:document.getElementById('mob-type').value,name:document.getElementById('mob-name').value.trim(),description:document.getElementById('mob-desc').value.trim(),duration:parseInt(document.getElementById('mob-duration').value)||0,exercises:[...mobSessionExercises]};await saveMobility(m);stlMobView='list';renderStlMobility();renderLifeCalendar();}date:document.getElementById('mob-date').value,type:document.getElementById('mob-type').value,name:document.getElementById('mob-name').value.trim(),description:document.getElementById('mob-desc').value.trim(),duration:parseInt(document.getElementById('mob-duration').value)||0,exercises:[...mobSessionExercises]};await saveMobility(m);stlMobView='list';renderStlMobility();renderLifeCalendar();}
+  async function saveStlMobility(){const m={id:'MOB'+Date.now(),date:document.getElementById('mob-date').value,type:document.getElementById('mob-type').value,name:document.getElementById('mob-name').value.trim(),description:document.getElementById('mob-desc').value.trim(),duration:parseInt(document.getElementById('mob-duration').value)||0,exercises:[...mobSessionExercises]};await saveMobility(m);stlMobView='list';renderStlMobility();renderLifeCalendar();}
   async function deleteStlMob(id){if(!confirm('Delete?'))return;await deleteMobility(id);stlMobView='list';renderStlMobility();renderLifeCalendar();}
 
   let stlReadView='list',stlReadBookId=null;
@@ -1760,7 +1691,7 @@
     const active=books.filter(b=>!b.finished),finished=books.filter(b=>b.finished);
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Books Read</div><div class="stat-value">${finished.length}</div></div><div class="stat-card"><div class="stat-label">Currently Reading</div><div class="stat-value">${active.length}</div></div></div><button class="btn" onclick="stlReadView='add';renderStlReading()">+ Add New Book</button>${active.length>0?`<div class="section-title" style="margin-top:20px">Currently Reading</div>${active.map(b=>{const pr=(b.pageLogs||[]).reduce((s,l)=>s+l.pages,0);const pct=b.totalPages?Math.min(100,Math.round((pr/b.totalPages)*100)):0;return `<div class="entry-list-item" onclick="stlReadBookId='${b.id}';stlReadView='detail';renderStlReading()"><div style="flex:1"><div class="entry-ref">${b.id}</div><div class="entry-title">${b.title}</div><div class="entry-sub">${pr}${b.totalPages?' of '+b.totalPages:''} pages &middot; ${pct}%</div><div class="book-progress-bar" style="margin-top:6px"><div class="book-progress-fill" style="width:${pct}%"></div></div></div><div class="entry-chevron" style="margin-left:12px">›</div></div>`;}).join('')}`:''}${finished.length>0?`<div class="section-title" style="margin-top:20px">Finished</div>${finished.map(b=>`<div class="entry-list-item" onclick="stlReadBookId='${b.id}';stlReadView='detail';renderStlReading()"><div><div class="entry-ref">${b.id}</div><div class="entry-title">${b.title} ✓</div><div class="entry-sub">Started ${dateDisplay(b.dateStarted,{day:'numeric',month:'short',year:'numeric'})}</div></div><div class="entry-chevron">›</div></div>`).join('')}`:''}${books.length===0?'<div class="empty-state"><p>No books added yet.</p></div>':''}`;
   }
-  async function saveNewBook(){const title=document.getElementById('book-title').value.trim();if(!title){alert('Please enter a title');return;}const b={id:'READ'+Date.now(),title,totalPages:parseInt(document.getElementById('book-pages').value)||0,dateStarted:document.getElementById('book-start').value,finished:false,pageLogs:[],summary:'',learnings:''};await saveBook(b);stlReadView='list';renderStlReading();}title,totalPages:parseInt(document.getElementById('book-pages').value)||0,dateStarted:document.getElementById('book-start').value,finished:false,pageLogs:[],summary:'',learnings:''};await saveBook(b);stlReadView='list';renderStlReading();}
+  async function saveNewBook(){const title=document.getElementById('book-title').value.trim();if(!title){alert('Please enter a title');return;}const b={id:'READ'+Date.now(),title,totalPages:parseInt(document.getElementById('book-pages').value)||0,dateStarted:document.getElementById('book-start').value,finished:false,pageLogs:[],summary:'',learnings:''};await saveBook(b);stlReadView='list';renderStlReading();}
   async function addPageLog(bookId){const pages=parseInt(document.getElementById('page-log-pages').value);const date=document.getElementById('page-log-date').value;if(!pages||pages<1){alert('Please enter pages read');return;}const book=getBooks().find(b=>b.id===bookId);if(!book)return;if(!book.pageLogs)book.pageLogs=[];book.pageLogs.push({date,pages});await saveBook(book);renderStlReading();renderLifeCalendar();}
   function openFinishBook(id){stlReadBookId=id;stlReadView='finish';renderStlReading();}
   async function finishBook(id){const book=getBooks().find(b=>b.id===id);if(!book)return;book.finished=true;book.summary=document.getElementById('finish-summary').value.trim();book.learnings=document.getElementById('finish-learnings').value.trim();await saveBook(book);stlReadView='detail';renderStlReading();}
@@ -1775,7 +1706,7 @@
     if(stlMindView==='add'){body.innerHTML=`<button class="detail-back-btn" onclick="stlMindView='list';renderStlMindfulness()">← Cancel</button><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log Mindfulness Session</div><div class="field-label">Type</div><select class="field-input" id="mind-type"><option value="Meditation">Meditation</option><option value="Breathwork">Breathwork</option></select><div class="field-label">Duration (minutes)</div><input class="field-input" id="mind-duration" type="number" value="10" min="1"><div class="field-label">Date</div><input class="field-input" id="mind-date" type="date" value="${todayStr()}"><div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div><input class="field-input" id="mind-notes" type="text" placeholder="Any notes..."><button class="btn" style="margin-top:16px" onclick="saveStlMindfulness()">Save Session</button>`;return;}
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sessions.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div><div class="stat-card"><div class="stat-label">Meditation</div><div class="stat-value">${sessions.filter(s=>s.type==='Meditation').length}</div></div><div class="stat-card"><div class="stat-label">Breathwork</div><div class="stat-value">${sessions.filter(s=>s.type==='Breathwork').length}</div></div></div><button class="btn" onclick="stlMindView='add';renderStlMindfulness()">+ Log Session</button><div class="section-title" style="margin-top:20px">Session Log</div>${sessions.length===0?'<div class="empty-state"><p>No sessions logged yet.</p></div>':sessions.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-ref">${s.id}</div><div class="entry-title">${s.type}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})} &middot; ${s.duration} mins${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlMind('${s.id}')" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
   }
-  async function saveStlMindfulness(){const m={id:'MIND'+Date.now(),date:document.getElementById('mind-date').value,type:document.getElementById('mind-type').value,duration:parseInt(document.getElementById('mind-duration').value)||10,notes:document.getElementById('mind-notes').value.trim()};await saveMindfulness(m);stlMindView='list';renderStlMindfulness();renderLifeCalendar();}date:document.getElementById('mind-date').value,type:document.getElementById('mind-type').value,duration:parseInt(document.getElementById('mind-duration').value)||10,notes:document.getElementById('mind-notes').value.trim()};await saveMindfulness(m);stlMindView='list';renderStlMindfulness();renderLifeCalendar();}
+  async function saveStlMindfulness(){const m={id:'MIND'+Date.now(),date:document.getElementById('mind-date').value,type:document.getElementById('mind-type').value,duration:parseInt(document.getElementById('mind-duration').value)||10,notes:document.getElementById('mind-notes').value.trim()};await saveMindfulness(m);stlMindView='list';renderStlMindfulness();renderLifeCalendar();}
   async function deleteStlMind(id){if(!confirm('Delete?'))return;await deleteMindfulness(id);renderStlMindfulness();renderLifeCalendar();}
 
   let stlSportsView='list';
@@ -1789,7 +1720,7 @@
     if(stlSportsView==='add'){body.innerHTML=`<button class="detail-back-btn" onclick="stlSportsView='list';renderStlSports()">← Cancel</button><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log a Sport</div><div class="field-label">Sport</div><input class="field-input" id="sport-name" type="text" placeholder="e.g. Volleyball, Basketball, Tennis"><div class="field-label">Date</div><input class="field-input" id="sport-date" type="date" value="${todayStr()}"><div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div><input class="field-input" id="sport-notes" type="text" placeholder="e.g. Beach volleyball with friends"><button class="btn" style="margin-top:16px" onclick="saveStlSport()">Save</button>`;return;}
     body.innerHTML=`<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">${sports.length}</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">${mc}</div></div>${topSport?`<div class="stat-card" style="grid-column:span 2"><div class="stat-label">Most Played</div><div class="stat-value" style="font-size:20px">${topSport[0]}</div><div class="stat-unit">${topSport[1]} sessions total</div></div>`:''}</div><button class="btn" onclick="stlSportsView='add';renderStlSports()">+ Log a Sport</button><div class="section-title" style="margin-top:20px">Sports Log</div>${sports.length===0?'<div class="empty-state"><p>No sports logged yet.</p></div>':sports.map(s=>`<div class="entry-list-item" style="cursor:default"><div><div class="entry-title">${s.sport}</div><div class="entry-sub">${dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})}${s.notes?' &middot; '+s.notes:''}</div></div><button onclick="deleteStlSport('${s.id}')" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">×</button></div>`).join('')}`;
   }
-  async function saveStlSport(){const sport=document.getElementById('sport-name').value.trim();if(!sport){alert('Please enter a sport name');return;}const s={const s={id:'SPORT'+Date.now(),,sport,date:document.getElementById('sport-date').value,notes:document.getElementById('sport-notes').value.trim()};await saveSport(s);stlSportsView='list';renderStlSports();renderLifeCalendar();}
+  async function saveStlSport(){const sport=document.getElementById('sport-name').value.trim();if(!sport){alert('Please enter a sport name');return;}const s={id:'SPORT'+Date.now(),sport,date:document.getElementById('sport-date').value,notes:document.getElementById('sport-notes').value.trim()};await saveSport(s);stlSportsView='list';renderStlSports();renderLifeCalendar();}
   async function deleteStlSport(id){if(!confirm('Delete?'))return;await deleteSport(id);renderStlSports();renderLifeCalendar();}
 
   function initApp(){
