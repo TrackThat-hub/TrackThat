@@ -705,70 +705,94 @@ function renderSurfStats(){
 }
 
 // BUG FIX #5: Monday-based month grid calendar
+// Build the month grid shell — no inline data, just numbered cells
 function buildMonthGrid(year,month){
   const dim=new Date(year,month+1,0).getDate();
-  // Monday=0: (getDay()+6)%7
-  const firstDow=(new Date(year,month,1).getDay()+6)%7;
+  const firstDow=(new Date(year,month,1).getDay()+6)%7; // Monday=0
   const todayD=new Date();
   const todayDate=(todayD.getFullYear()===year&&todayD.getMonth()===month)?todayD.getDate():null;
   let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
   ['M','T','W','T','F','S','S'].forEach(l=>{html+='<div style="font-size:9px;color:#555;text-align:center;font-weight:600;text-transform:uppercase;padding-bottom:4px">'+l+'</div>';});
-  html+='</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
-  for(let i=0;i<firstDow;i++)html+='<div style="background:transparent;min-height:48px;border-radius:5px"></div>';
+  html+='</div><div id="cal-grid-inner-'+year+'-'+month+'" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  for(let i=0;i<firstDow;i++)html+='<div style="background:transparent;min-height:56px;border-radius:6px"></div>';
   for(let d=1;d<=dim;d++){
     const isToday=d===todayDate;
-    html+='<div id="calcell-'+year+'-'+month+'-'+d+'" style="background:#1e1e1e;border-radius:5px;min-height:48px;padding:3px 2px 2px;'+(isToday?'outline:1.5px solid #FFAA32;':'')+'"><div style="font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';font-weight:'+(isToday?'700':'400')+';text-align:right;padding-right:2px;line-height:1;margin-bottom:2px">'+d+'</div><div id="caldots-'+year+'-'+month+'-'+d+'" style="display:flex;flex-wrap:wrap;gap:2px;padding:0 1px"></div></div>';
+    html+='<div id="calcell-'+year+'-'+month+'-'+d+'" style="background:#1e1e1e;border-radius:6px;min-height:56px;padding:3px 2px 2px;'+(isToday?'outline:1.5px solid #FFAA32;':'')+'"><div style="font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';font-weight:'+(isToday?'700':'400')+';text-align:right;padding-right:2px;line-height:1;margin-bottom:2px">'+d+'</div><div id="calemoji-'+year+'-'+month+'-'+d+'" style="display:flex;flex-direction:column;align-items:center;gap:1px;padding-top:1px;font-size:14px;line-height:1.3"></div></div>';
   }
   html+='</div>';
   return html;
 }
 
-function addCalDot(year,month,day,color){
-  const el=document.getElementById('caldots-'+year+'-'+month+'-'+day);
+// Add an emoji to a calendar day cell — appends a text node so innerHTML+= on the wrapper never breaks it
+function addCalEmoji(year,month,day,emoji){
+  const el=document.getElementById('calemoji-'+year+'-'+month+'-'+day);
   if(!el)return;
-  const dot=document.createElement('div');
-  dot.style.cssText='width:6px;height:6px;border-radius:50%;flex-shrink:0;background:'+color;
-  el.appendChild(dot);
+  const span=document.createElement('span');
+  span.textContent=emoji;
+  el.appendChild(span);
 }
 
-// BUG FIX #5: single renderCalendars() replaces both old calendar functions
+// Build legend row as a separate element (never touches the grid DOM)
+function buildLegend(items){
+  const wrap=document.createElement('div');
+  wrap.style.cssText='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;padding-top:8px;border-top:1px solid #333';
+  items.forEach(([emoji,label])=>{
+    const item=document.createElement('div');
+    item.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;color:#888';
+    item.innerHTML='<span style="font-size:14px">'+emoji+'</span>'+label;
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+
+// Render both calendars — data injected via DOM after grid is set, legend appended separately
 function renderCalendars(){
   const now=new Date(),year=now.getFullYear(),month=now.getMonth();
-  const dotColors={gym:'#4A9EFF',swim:'#64C8FF',run:'#FF8C00',mobility:'#FFC864',hyrox:'#FF5050',surf:'#2ECC71',reading:'#FFAA32',mindfulness:'#64DCC8',sports:'#FF6496'};
 
-  // Training calendar
-  document.getElementById('cal-training-title').textContent=MON_NAMES[month]+' '+year+' - Training';
-  document.getElementById('cal-training-grid').innerHTML=buildMonthGrid(year,month);
+  // ── TRAINING CALENDAR ──
+  document.getElementById('cal-training-title').textContent=MON_NAMES[month]+' '+year+' — Training';
+  const trainGrid=document.getElementById('cal-training-grid');
+  trainGrid.innerHTML=buildMonthGrid(year,month);
   getWorkouts().forEach(w=>{
     const d=new Date(w.date);
     if(d.getFullYear()!==year||d.getMonth()!==month)return;
     const t=(w.type||'gym').toLowerCase();
-    let cls='gym';
-    if(t==='swim'||t==='swimming')cls='swim';
-    else if(t==='run'||t==='running')cls='run';
-    else if(t==='mobility')cls='mobility';
-    else if(t==='hyrox')cls='hyrox';
-    addCalDot(year,month,d.getDate(),dotColors[cls]);
+    let emoji='🏋️';
+    if(t==='swim'||t==='swimming')emoji='🏊';
+    else if(t==='run'||t==='running')emoji='🏃';
+    else if(t==='mobility')emoji='🧘';
+    else if(t==='hyrox')emoji='⚡';
+    addCalEmoji(year,month,d.getDate(),emoji);
   });
-  document.getElementById('cal-training-grid').innerHTML+=
-    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid #333">'+
-    [['#4A9EFF','Gym'],['#FF8C00','Run'],['#64C8FF','Swim'],['#FFC864','Mobility'],['#FF5050','Hyrox']].map(([c,l])=>
-      '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:#666"><div style="width:7px;height:7px;border-radius:50%;background:'+c+';flex-shrink:0"></div>'+l+'</div>'
-    ).join('')+'</div>';
+  trainGrid.appendChild(buildLegend([['🏋️','Gym'],['🏃','Run'],['🏊','Swim'],['🧘','Mobility'],['⚡','Hyrox']]));
 
-  // Life calendar
-  document.getElementById('cal-life-title').textContent=MON_NAMES[month]+' '+year+' - Life';
-  document.getElementById('cal-life-grid').innerHTML=buildMonthGrid(year,month);
-  getSurfs().forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalDot(year,month,d.getDate(),dotColors.surf);});
-  getMobility().forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalDot(year,month,d.getDate(),dotColors.mobility);});
-  getMindfulness().forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalDot(year,month,d.getDate(),dotColors.mindfulness);});
-  getSports().forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalDot(year,month,d.getDate(),dotColors.sports);});
-  getBooks().forEach(b=>{(b.pageLogs||[]).forEach(l=>{const d=new Date(l.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalDot(year,month,d.getDate(),dotColors.reading);});});
-  document.getElementById('cal-life-grid').innerHTML+=
-    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid #333">'+
-    [['#2ECC71','Surf'],['#FFC864','Mobility'],['#FFAA32','Reading'],['#64DCC8','Mindfulness'],['#FF6496','Sports']].map(([c,l])=>
-      '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:#666"><div style="width:7px;height:7px;border-radius:50%;background:'+c+';flex-shrink:0"></div>'+l+'</div>'
-    ).join('')+'</div>';
+  // ── LIFE CALENDAR ──
+  document.getElementById('cal-life-title').textContent=MON_NAMES[month]+' '+year+' — Life';
+  const lifeGrid=document.getElementById('cal-life-grid');
+  lifeGrid.innerHTML=buildMonthGrid(year,month);
+  getSurfs().forEach(s=>{
+    const d=new Date(s.date);
+    if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'🌊');
+  });
+  getMobility().forEach(s=>{
+    const d=new Date(s.date);
+    if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'🧘');
+  });
+  getMindfulness().forEach(s=>{
+    const d=new Date(s.date);
+    if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'🌬️');
+  });
+  getSports().forEach(s=>{
+    const d=new Date(s.date);
+    if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'🏅');
+  });
+  getBooks().forEach(b=>{
+    (b.pageLogs||[]).forEach(l=>{
+      const d=new Date(l.date);
+      if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'📚');
+    });
+  });
+  lifeGrid.appendChild(buildLegend([['🌊','Surf'],['🧘','Mobility'],['🌬️','Mindfulness'],['🏅','Sports'],['📚','Reading']]));
 }
 
 let activeLogState=null,activeWeekOffset=0,mobBlocksDone={},tickState={};
