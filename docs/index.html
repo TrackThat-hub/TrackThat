@@ -709,10 +709,10 @@ function buildMonthGrid(year,month){
   let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
   ['M','T','W','T','F','S','S'].forEach(l=>{html+='<div style="font-size:9px;color:#555;text-align:center;font-weight:600;text-transform:uppercase;padding-bottom:4px">'+l+'</div>';});
   html+='</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
-  for(let i=0;i<firstDow;i++)html+='<div style="background:transparent;min-height:64px;border-radius:6px"></div>';
+  for(let i=0;i<firstDow;i++)html+='<div style="background:transparent;min-height:72px;border-radius:6px"></div>';
   for(let d=1;d<=dim;d++){
     const isToday=d===todayDate;
-    html+='<div id="calcell-'+year+'-'+month+'-'+d+'" style="background:#1e1e1e;border-radius:6px;min-height:64px;padding:3px 2px 2px;'+(isToday?'outline:1.5px solid #FFAA32;':'')+'"><div style="font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';font-weight:'+(isToday?'700':'400')+';text-align:right;padding-right:2px;line-height:1;margin-bottom:2px">'+d+'</div><div id="calemoji-'+year+'-'+month+'-'+d+'" style="display:flex;flex-direction:column;align-items:center;gap:0px;padding-top:1px;font-size:13px;line-height:1.25"></div></div>';
+    html+='<div id="calcell-'+year+'-'+month+'-'+d+'" style="background:#1e1e1e;border-radius:6px;min-height:72px;padding:3px 2px 2px;'+(isToday?'outline:1.5px solid #FFAA32;':'')+'"><div style="font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';font-weight:'+(isToday?'700':'400')+';text-align:right;padding-right:2px;line-height:1;margin-bottom:2px">'+d+'</div><div id="calemoji-'+year+'-'+month+'-'+d+'" style="display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start;gap:1px;padding-top:1px;font-size:12px;line-height:1.3"></div></div>';
   }
   html+='</div>';
   return html;
@@ -721,9 +721,26 @@ function buildMonthGrid(year,month){
 function addCalEmoji(year,month,day,emoji){
   const el=document.getElementById('calemoji-'+year+'-'+month+'-'+day);
   if(!el)return;
-  const span=document.createElement('span');
-  span.textContent=emoji;
-  el.appendChild(span);
+  const count=parseInt(el.dataset.count||'0');
+  if(count<4){
+    const span=document.createElement('span');
+    span.textContent=emoji;
+    // Each emoji gets half the container width so they wrap into a 2-col box pattern:
+    // 1 item  → centred on its own line (takes 50% width, justified centre)
+    // 2 items → side by side
+    // 3 items → 2 on top row, 1 on bottom left
+    // 4 items → 2x2 complete box
+    span.style.cssText='width:50%;text-align:center;';
+    el.appendChild(span);
+  } else if(count===4){
+    // 5th activity: turn last emoji into a +N badge
+    const last=el.lastChild;
+    if(last){last.textContent='+2';last.style.cssText='width:50%;text-align:center;font-size:9px;color:#888;font-weight:700;';}
+  } else {
+    const last=el.lastChild;
+    if(last)last.textContent='+'+(count-2);
+  }
+  el.dataset.count=count+1;
 }
 
 function buildLegend(items){
