@@ -712,7 +712,7 @@ function buildMonthGrid(year,month){
   for(let i=0;i<firstDow;i++)html+='<div style="background:transparent;min-height:72px;border-radius:6px"></div>';
   for(let d=1;d<=dim;d++){
     const isToday=d===todayDate;
-    html+='<div id="calcell-'+year+'-'+month+'-'+d+'" style="background:#1e1e1e;border-radius:6px;min-height:72px;padding:3px 2px 2px;'+(isToday?'outline:1.5px solid #FFAA32;':'')+'"><div style="font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';font-weight:'+(isToday?'700':'400')+';text-align:right;padding-right:2px;line-height:1;margin-bottom:2px">'+d+'</div><div id="calemoji-'+year+'-'+month+'-'+d+'" style="display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start;gap:1px;padding-top:1px;font-size:12px;line-height:1.3"></div></div>';
+    html+='<div id="calcell-'+year+'-'+month+'-'+d+'" style="background:#1e1e1e;border-radius:6px;min-height:72px;padding:3px 2px 2px;'+(isToday?'outline:1.5px solid #FFAA32;':'')+'"><div style="font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';font-weight:'+(isToday?'700':'400')+';text-align:right;padding-right:2px;line-height:1;margin-bottom:2px">'+d+'</div><div id="calemoji-'+year+'-'+month+'-'+d+'" style="display:flex;flex-wrap:wrap;align-content:flex-start;gap:0px;padding-top:1px;font-size:13px;line-height:1.25"></div></div>';
   }
   html+='</div>';
   return html;
