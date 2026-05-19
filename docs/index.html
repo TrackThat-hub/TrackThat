@@ -777,7 +777,7 @@
       if(counts.mobility>0)pills+=`<span class="activity-pill pill-mobility">🧘 ${counts.mobility}x mobility</span>`;
       if(counts.hyrox>0)pills+=`<span class="activity-pill pill-hyrox">⚡ ${counts.hyrox}x hyrox</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      row.innerHTML=`<div class="week-label">Wk ${wi+1}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
+      const firstDay=w.find(d=>d!==null);const weekNum=firstDay?Math.ceil(firstDay/7):wi+1; row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
   }
@@ -812,7 +812,7 @@
       if(counts.mindfulness>0)pills+=`<span class="activity-pill pill-mindfulness">🌬️ ${counts.mindfulness}x mindfulness</span>`;
       if(counts.sports>0)pills+=`<span class="activity-pill pill-sports">🏅 ${counts.sports}x sports</span>`;
       const row=document.createElement('div');row.className='calendar-week';
-      row.innerHTML=`<div class="week-label">Wk ${wi+1}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
+      const firstDay=w.find(d=>d!==null);const weekNum=firstDay?Math.ceil(firstDay/7):wi+1; row.innerHTML=`<div class="week-label">Wk ${weekNum}</div><div class="week-activities">${has?pills:'<span class="week-empty">No activity logged</span>'}</div>`;
       el.appendChild(row);
     });
   }
@@ -1677,7 +1677,7 @@
   async function saveProgramToDb(status){
     const programs=getPrograms();const p=builderState.program;
     if(status==='active'){for(const pr of programs){if(pr.status==='active'){pr.status='archived';await saveProgram(pr);}}}
-    const tw=p.days.reduce((sum,d)=>sum+d.sessions.reduce((s2,s)=>s2+(s.exercises?.length||0)+(s.mobilityBlock?1:0),0),0);
+    const tw=p.days.reduce((sum,d)=>sum+d.sessions.filter(s=>(s.exercises?.length||0)>0||s.mobilityBlock).length,0);
     const pd={...p,id:p.id||'P'+Date.now(),status,currentWeek:p.currentWeek||1,completedWorkouts:p.completedWorkouts||0,totalWorkouts:Math.max(tw,p.days.length)};
     await saveProgram(pd);activeWeekOffset=0;
     renderProgramCard();renderTrainingStats();
