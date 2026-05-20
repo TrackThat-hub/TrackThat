@@ -385,7 +385,7 @@
       </div>
       <div class="section-title">Insights</div>
       <div class="insight-grid">
-        <div class="insight-card"><div class="i-label">Current Streak</div><div class="i-value" id="insight-streak">0 days</div><div class="i-sub" id="insight-best-streak">Best: 0 days</div></div>
+        <div class="insight-card" style="grid-column:span 2"><div class="i-label">Last 7 Days</div><div id="seven-day-strip" style="display:flex;gap:4px;margin-top:4px"></div></div>
         <div class="insight-card"><div class="i-label">Volume vs Last Month</div><div class="i-value" id="insight-volume-trend">&#8212;</div><div class="i-sub" id="insight-volume-sub">calculating...</div></div>
       </div>
       <div class="insight-grid">
@@ -413,7 +413,7 @@
         <div><div class="surf-last-label">Last Surf</div><div class="surf-last-loc" id="surf-last-loc">&#8212;</div><div class="surf-last-date" id="surf-last-date">&#8212;</div></div>
         <div style="font-size:28px">&#x1F30A;</div>
       </div>
-      <div class="section-title">This Month</div>
+      <div class="section-title">Life This Month</div>
       <div class="cal-card">
         <div class="cal-title" id="cal-combined-title"></div>
         <div id="cal-combined-grid"></div>
@@ -652,13 +652,80 @@ function renderTrainingStats(){
   document.getElementById('stat-missed').textContent=missed;
 }
 
+function renderSevenDayStrip(){
+  const el=document.getElementById('seven-day-strip');
+  if(!el)return;
+  const today=todayStr();
+  const days=Array.from({length:7},(_,i)=>addDays(today,-(6-i)));
+  const workouts=getWorkouts();
+  const surfs=getSurfs();
+  const mobility=getMobility();
+  const mindfulness=getMindfulness();
+  const sports=getSports();
+  const books=getBooks();
+  el.innerHTML='';
+  days.forEach(dateKey=>{
+    const d=new Date(dateKey.split('-')[0],dateKey.split('-')[1]-1,dateKey.split('-')[2]);
+    const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    const dayNum=parseInt(dateKey.split('-')[2]);
+    const isToday=dateKey===today;
+    // collect emojis for this day
+    const emojis=[];
+    workouts.filter(w=>w.date===dateKey).forEach(w=>{
+      const t=(w.type||'gym').toLowerCase();
+      if(t==='swim'||t==='swimming')emojis.push('🏊');
+      else if(t==='run'||t==='running')emojis.push('🏃');
+      else if(t==='mobility')emojis.push('🧘');
+      else if(t==='hyrox')emojis.push('⚡');
+      else emojis.push('🏋️');
+    });
+    surfs.filter(s=>s.date===dateKey).forEach(()=>emojis.push('🌊'));
+    mobility.filter(s=>s.date===dateKey).forEach(()=>emojis.push('🧘'));
+    mindfulness.filter(s=>s.date===dateKey).forEach(()=>emojis.push('🌬️'));
+    sports.filter(s=>s.date===dateKey).forEach(()=>emojis.push('🏅'));
+    books.forEach(b=>{if((b.pageLogs||[]).some(l=>l.date===dateKey))emojis.push('📚');});
+    const hasActivity=emojis.length>0;
+    // build day box
+    const box=document.createElement('div');
+    box.style.cssText='flex:1;background:#222;border-radius:10px;padding:6px 2px;text-align:center;border:1.5px solid '+(isToday?'#FFAA32':hasActivity?'#3a3a3a':'transparent')+';min-width:0;';
+    // day label
+    const label=document.createElement('div');
+    label.style.cssText='font-size:9px;color:'+(isToday?'#FFAA32':'#555')+';text-transform:uppercase;font-weight:600;margin-bottom:2px;';
+    label.textContent=dayName;
+    box.appendChild(label);
+    // day number
+    const num=document.createElement('div');
+    num.style.cssText='font-size:11px;font-weight:700;color:'+(isToday?'#FFAA32':'#888')+';margin-bottom:4px;';
+    num.textContent=dayNum;
+    box.appendChild(num);
+    // emojis — show up to 4 in 2x2, rest as +N
+    const emojiWrap=document.createElement('div');
+    emojiWrap.style.cssText='display:flex;flex-wrap:wrap;justify-content:center;gap:1px;font-size:13px;min-height:16px;';
+    if(emojis.length===0){
+      const empty=document.createElement('div');
+      empty.style.cssText='width:100%;height:14px;';
+      emojiWrap.appendChild(empty);
+    } else {
+      const show=emojis.slice(0,4);
+      show.forEach((emoji,i)=>{
+        const s=document.createElement('span');
+        s.textContent=emoji;
+        s.style.cssText='width:50%;text-align:center;font-size:12px;line-height:1.3;';
+        emojiWrap.appendChild(s);
+      });
+      if(emojis.length>4){
+        const last=emojiWrap.lastChild;
+        if(last){last.textContent='+'+(emojis.length-3);last.style.cssText='width:50%;text-align:center;font-size:9px;color:#888;font-weight:700;';}
+      }
+    }
+    box.appendChild(emojiWrap);
+    el.appendChild(box);
+  });
+}
+
 function renderInsights(){
   const workouts=getWorkouts(),today=todayStr();
-  let streak=0,best=getBestStreak();
-  for(let i=0;i<365;i++){const key=addDays(today,-i);if(workouts.some(w=>w.date===key))streak++;else if(i>0)break;}
-  if(streak>best){best=streak;saveBestStreak(best);}
-  document.getElementById('insight-streak').textContent=streak+' days';
-  document.getElementById('insight-best-streak').textContent='Best: '+best+' days';
+  renderSevenDayStrip();
   const now=new Date(),tm=now.getMonth(),ty=now.getFullYear(),lm=tm===0?11:tm-1,ly=tm===0?ty-1:ty;
   const thisVol=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===tm&&d.getFullYear()===ty;}).reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
   const lastVol=workouts.filter(w=>{const d=new Date(w.date);return d.getMonth()===lm&&d.getFullYear()===ly;}).reduce((s,w)=>s+(w.total_kg||w.totalKg||0),0);
@@ -760,7 +827,7 @@ function renderCalendars(){
   const now=new Date(),year=now.getFullYear(),month=now.getMonth();
   const TRAINING_TYPES=['gym','swim','swimming','run','running','mobility','hyrox'];
 
-  document.getElementById('cal-combined-title').textContent=MON_NAMES[month]+' '+year;
+  document.getElementById('cal-combined-title').textContent='Life This Month — '+MON_NAMES[month]+' '+year;
   const grid=document.getElementById('cal-combined-grid');
   grid.innerHTML=buildMonthGrid(year,month);
 
@@ -898,7 +965,9 @@ function renderWorkoutLogger(program,state){
   const startDate=program.startDate||todayStr();
   const daysSince=diffDays(startDate,state.dateKey);
   const weekNum=Math.max(1,Math.floor(daysSince/7)+1);
-  let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><button class="btn-outline" style="padding:8px 14px;font-size:13px;flex:none" onclick="activeLogState=null;renderActiveProgram()">Back</button><div style="font-size:13px;color:#888">'+dateDisplay(state.dateKey,{weekday:'long',day:'numeric',month:'long'})+'</div></div><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">'+dayData.name+'</div><div style="font-size:14px;color:#4A9EFF;margin-bottom:4px">'+sessionLabel+'</div><div style="font-size:13px;color:#888;margin-bottom:20px">'+program.name+' &middot; Week '+weekNum+'</div>';
+  const actualToday=todayStr();
+  const isLate=state.dateKey!==actualToday;
+  let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><button class="btn-outline" style="padding:8px 14px;font-size:13px;flex:none" onclick="activeLogState=null;renderActiveProgram()">Back</button><div style="font-size:13px;color:#888">'+dateDisplay(state.dateKey,{weekday:'long',day:'numeric',month:'long'})+'</div></div><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">'+dayData.name+'</div><div style="font-size:14px;color:#4A9EFF;margin-bottom:4px">'+sessionLabel+'</div>'+(isLate?'<div style="font-size:12px;background:rgba(255,170,50,0.12);border:1px solid rgba(255,170,50,0.25);color:#FFAA32;border-radius:8px;padding:7px 12px;margin-bottom:12px">Scheduled '+dateDisplay(state.dateKey,{weekday:'long'})+' &mdash; completing today &middot; will record in calendar as '+dateDisplay(actualToday,{weekday:'long',day:'numeric',month:'short'})+'</div>':'')+'<div style="font-size:13px;color:#888;margin-bottom:20px">'+program.name+' &middot; Week '+weekNum+'</div>';
   if(session.mobilityBlock){
     const mb=session.mobilityBlock;
     const isDone=mobBlocksDone['mob']==='done';
@@ -1008,7 +1077,7 @@ async function finishSession(programId,dateKey,sessionIdx){
   }
   program.completedWorkouts=(program.completedWorkouts||0)+1;
   await saveProgram(program);
-  await saveWorkout({id:'W'+Date.now(),date:dateKey,type:session.type||'gym',name:(dayData.name||'Workout')+(session.label?' - '+session.label:''),totalKg,exercises:[]});
+  await saveWorkout({id:'W'+Date.now(),date:todayStr(),type:session.type||'gym',name:(dayData.name||'Workout')+(session.label?' - '+session.label:''),totalKg,exercises:[]});
   activeLogState=null;mobBlocksDone={};tickState={};renderProgramCard();renderTrainingStats();
   const body=document.getElementById('active-body');
   const prHtml=newPRs.length>0?'<div class="pr-summary-card"><div class="pr-summary-title">New Personal Records!</div>'+newPRs.map(pr=>'<div class="pr-summary-row">'+pr.name+' - '+pr.val+pr.unit+'</div>').join('')+'</div>':'';
