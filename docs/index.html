@@ -387,6 +387,7 @@
       <div class="insight-grid">
         <div class="insight-card" style="grid-column:span 2"><div class="i-label">Last 7 Days</div><div id="seven-day-strip" style="display:flex;gap:4px;margin-top:4px"></div></div>
         <div class="insight-card"><div class="i-label">Volume vs Last Month</div><div class="i-value" id="insight-volume-trend">&#8212;</div><div class="i-sub" id="insight-volume-sub">calculating...</div></div>
+        <div class="insight-card"><div class="i-label">Sessions This Week</div><div class="i-value" id="insight-sessions-week">&#8212;</div><div class="i-sub" id="insight-sessions-week-sub">of week target</div></div>
       </div>
       <div class="insight-grid">
         <div class="insight-card" style="grid-column:span 2"><div class="i-label">Last Workout</div><div class="i-value" id="insight-last-workout" style="font-size:16px">&#8212;</div></div>
@@ -732,6 +733,46 @@ function renderInsights(){
   const tEl=document.getElementById('insight-volume-trend'),tSub=document.getElementById('insight-volume-sub');
   if(lastVol===0){tEl.textContent='--';tEl.className='i-value';tSub.textContent='No data last month';}
   else{const pct=Math.round(((thisVol-lastVol)/lastVol)*100);tEl.textContent=(pct>=0?'+':'')+pct+'%';tEl.className='i-value '+(pct>=0?'positive':'negative');tSub.textContent='vs last month ('+lastVol.toLocaleString()+'kg)';}
+  // Sessions this week
+  const active=getPrograms().find(p=>p.status==='active');
+  const wEl=document.getElementById('insight-sessions-week');
+  const wSub=document.getElementById('insight-sessions-week-sub');
+  if(active&&active.startDate){
+    // find Mon-Sun week containing today
+    const todayD=new Date();
+    const dayOfWk=(todayD.getDay()+6)%7; // Mon=0
+    const monDate=new Date(todayD);monDate.setDate(todayD.getDate()-dayOfWk);
+    const weekDates=Array.from({length:7},(_,i)=>{const d=new Date(monDate);d.setDate(monDate.getDate()+i);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');});
+    // count scheduled sessions this week in program
+    let scheduled=0;
+    weekDates.forEach(dk=>{const day=active.days&&active.days.find(d=>d.dateKey===dk);if(day)scheduled+=day.sessions.filter(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock).length;});
+    // count completed sessions this week
+    const cs=getCSN();
+    const completed=cs.filter(c=>c.programId===active.id&&weekDates.includes(c.dateKey)).length;
+    // also count any ad-hoc workouts logged this week (not from program)
+    const adHoc=workouts.filter(w=>weekDates.includes(w.date)).length;
+    const total=Math.max(completed,adHoc);
+    if(scheduled>0){
+      wEl.textContent=total+' of '+scheduled;
+      wEl.className='i-value '+(total>=scheduled?'positive':total>=Math.floor(scheduled/2)?'blue':'negative');
+      wSub.textContent=total>=scheduled?'All done this week!':scheduled-total+' remaining';
+    } else {
+      wEl.textContent=total||'0';
+      wEl.className='i-value blue';
+      wSub.textContent='sessions logged';
+    }
+  } else {
+    // no active program — just count workouts this week
+    const todayD=new Date();
+    const dayOfWk=(todayD.getDay()+6)%7;
+    const monDate=new Date(todayD);monDate.setDate(todayD.getDate()-dayOfWk);
+    const weekDates=Array.from({length:7},(_,i)=>{const d=new Date(monDate);d.setDate(monDate.getDate()+i);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');});
+    const count=workouts.filter(w=>weekDates.includes(w.date)).length;
+    wEl.textContent=count||'0';
+    wEl.className='i-value blue';
+    wSub.textContent='sessions logged';
+  }
+
   const sorted=[...workouts].sort((a,b)=>new Date(b.date)-new Date(a.date));
   document.getElementById('insight-last-workout').textContent=sorted.length>0?(sorted[0].name||sorted[0].type||'--'):'--';
   document.getElementById('insight-days-since').textContent=diffDays(getStartDate(),today);
