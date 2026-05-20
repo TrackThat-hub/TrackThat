@@ -868,7 +868,7 @@ function renderCalendars(){
   const now=new Date(),year=now.getFullYear(),month=now.getMonth();
   const TRAINING_TYPES=['gym','swim','swimming','run','running','mobility','hyrox'];
 
-  document.getElementById('cal-combined-title').textContent='Life This Month — '+MON_NAMES[month]+' '+year;
+  document.getElementById('cal-combined-title').textContent=MON_NAMES[month]+' '+year;
   const grid=document.getElementById('cal-combined-grid');
   grid.innerHTML=buildMonthGrid(year,month);
 
