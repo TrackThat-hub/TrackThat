@@ -449,12 +449,14 @@
         <button class="sub-btn" onclick="showStlSection('reading',this)">&#x1F4DA; Reading</button>
         <button class="sub-btn" onclick="showStlSection('mindfulness',this)">&#x1F32C;&#xFE0F; Mindfulness</button>
         <button class="sub-btn" onclick="showStlSection('sports',this)">&#x1F3C5; Sports</button>
+        <button class="sub-btn" onclick="showStlSection('language',this)">&#x1F4AC; Language</button>
       </div>
       <div id="stl-surfing" class="designer-section"><div id="stl-surf-body"></div></div>
       <div id="stl-mobility" class="designer-section" style="display:none"><div id="stl-mob-body"></div></div>
       <div id="stl-reading" class="designer-section" style="display:none"><div id="stl-read-body"></div></div>
       <div id="stl-mindfulness" class="designer-section" style="display:none"><div id="stl-mind-body"></div></div>
       <div id="stl-sports" class="designer-section" style="display:none"><div id="stl-sports-body"></div></div>
+      <div id="stl-language" class="designer-section" style="display:none"><div id="stl-lang-body"></div></div>
     </div>
 
     <div id="history" class="page"><div id="history-body"></div></div>
@@ -474,21 +476,21 @@ async function sbUpsert(t,d){showSync('saving');try{const r=await fetch(`${SUPAB
 async function sbDel(t,id){showSync('saving');try{await fetch(`${SUPABASE_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});showSync('saved');}catch(e){showSync('error');}}
 function showSync(s){const el=document.getElementById('sync-indicator');el.className='sync-indicator '+s;el.textContent=s==='saving'?'Saving...':s==='saved'?'Saved':'Save failed';if(s!=='saving')setTimeout(()=>el.className='sync-indicator',2000);}
 
-let DB={workouts:[],programs:[],surfs:[],prs:[],mobility:[],books:[],mindfulness:[],sports:[],completed_sessions:[],completed_workouts:[],exercises:[],settings:{}};
+let DB={workouts:[],programs:[],surfs:[],prs:[],mobility:[],books:[],mindfulness:[],sports:[],language:[],completed_sessions:[],completed_workouts:[],exercises:[],settings:{}};
 
 async function loadAllData(){
   document.getElementById('pin-status').textContent='Loading your data...';
-  const [workouts,programs,surfs,prs,mobility,books,mindfulness,sports,cs,cw,exercises,settings]=await Promise.all([
+  const [workouts,programs,surfs,prs,mobility,books,mindfulness,sports,cs,cw,exercises,settings,language]=await Promise.all([
     sbGet('workouts'),sbGet('programs'),sbGet('surfs'),sbGet('prs'),sbGet('mobility'),sbGet('books'),
     sbGet('mindfulness'),sbGet('sports'),sbGet('completed_sessions'),sbGet('completed_workouts'),
-    sbGet('exercises'),sbGet('app_settings')
+    sbGet('exercises'),sbGet('app_settings'),sbGet('language')
   ]);
   DB.workouts=workouts||[];
   DB.programs=(programs||[]).map(p=>p.data&&typeof p.data==='object'?{...p.data,id:p.id}:p);
   DB.surfs=surfs||[];DB.prs=prs||[];
   DB.mobility=(mobility||[]).map(m=>m.data?{...m.data,id:m.id}:m);
   DB.books=(books||[]).map(b=>b.data?{...b.data,id:b.id}:b);
-  DB.mindfulness=mindfulness||[];DB.sports=sports||[];
+  DB.mindfulness=mindfulness||[];DB.sports=sports||[];DB.language=language||[];
   DB.completed_sessions=cs||[];DB.completed_workouts=cw||[];
   DB.settings={};(settings||[]).forEach(r=>DB.settings[r.key]=r.value);
   DB.exercises=(exercises||[]).map(e=>({id:e.id,name:e.name,category:e.category,unit:e.unit,bwWeighted:e.bw_weighted,description:e.description}));
@@ -526,6 +528,9 @@ async function saveMindfulness(m){DB.mindfulness.push(m);await sbUpsert('mindful
 async function deleteMindfulness(id){DB.mindfulness=DB.mindfulness.filter(m=>m.id!==id);await sbDel('mindfulness',id);}
 async function saveSport(s){DB.sports.push(s);await sbUpsert('sports',{id:s.id,sport:s.sport,date:s.date,notes:s.notes||''});}
 async function deleteSport(id){DB.sports=DB.sports.filter(s=>s.id!==id);await sbDel('sports',id);}
+function getLanguage(){return DB.language;}
+async function saveLanguageEntry(l){DB.language.push(l);await sbUpsert('language',{id:l.id,date:l.date,type:l.type,language:l.language||'Spanish',duration:l.duration,notes:l.notes||''});}
+async function deleteLanguageEntry(id){DB.language=DB.language.filter(l=>l.id!==id);await sbDel('language',id);}
 async function saveCS(cs){DB.completed_sessions.push(cs);await sbUpsert('completed_sessions',{program_id:cs.programId,date_key:cs.dateKey,session_idx:cs.sessionIdx,completed_at:cs.completedAt});}
 async function saveCW(cw){DB.completed_workouts.push(cw);await sbUpsert('completed_workouts',{ex_id:cw.exId,exercise_name:cw.exerciseName,date:cw.date,sets:cw.sets,reps:cw.reps,max_val:cw.maxVal});}
 async function saveExDb(ex){DB.exercises.push(ex);await sbUpsert('exercises',{id:ex.id,name:ex.name,category:ex.category,unit:ex.unit,bw_weighted:ex.bwWeighted||false,description:ex.description||''});}
@@ -685,6 +690,7 @@ function renderSevenDayStrip(){
     mindfulness.filter(s=>s.date===dateKey).forEach(()=>emojis.push('🌬️'));
     sports.filter(s=>s.date===dateKey).forEach(()=>emojis.push('🏅'));
     books.forEach(b=>{if((b.pageLogs||[]).some(l=>l.date===dateKey))emojis.push('📚');});
+    getLanguage().filter(l=>l.date===dateKey).forEach(l=>emojis.push(l.language==='German'?'🇩🇪':'🇪🇸'));
     const hasActivity=emojis.length>0;
     // build day box
     const box=document.createElement('div');
@@ -785,7 +791,52 @@ function renderProgramCard(){
   if(!active){el.innerHTML='<div class="empty-state"><p>No active program.</p><button class="btn" onclick="showPage(\'designer\',document.querySelectorAll(\'.nav button\')[2])">Go to Program Designer</button></div>';return;}
   const currentWeek=computeCurrentWeek(active);
   const pct=Math.round(((active.completedWorkouts||0)/active.totalWorkouts)*100);
-  el.innerHTML='<div class="program-card"><div class="program-top"><div class="program-name">'+active.name+'</div><div class="program-week">Week '+currentWeek+' of '+active.totalWeeks+'</div></div><div class="program-focus">'+active.focus+'</div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:'+pct+'%"></div></div><div class="progress-label">'+(active.completedWorkouts||0)+' of '+active.totalWorkouts+' workouts completed &mdash; '+pct+'%</div><button class="btn" onclick="showPage(\'active\',document.querySelectorAll(\'.nav button\')[1])">Jump to Next Workout</button></div>';
+  // Build today's session preview
+  const today=todayStr();
+  const todayData=active.days&&active.days.find(d=>d.dateKey===today);
+  const todaySessions=todayData?todayData.sessions.filter(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock):[];
+  let todayHtml='';
+  if(todaySessions.length>0){
+    const cs=getCSN();
+    todaySessions.forEach((sess,si)=>{
+      const done=cs.some(c=>c.programId===active.id&&c.dateKey===today&&c.sessionIdx===si);
+      const exNames=(sess.exercises||[]).slice(0,3).map(ex=>{const e=getExercises().find(e=>e.id===ex.exId);return e?e.name:'';}).filter(Boolean);
+      const more=(sess.exercises||[]).length>3?' +'+((sess.exercises||[]).length-3)+' more':'';
+      todayHtml+='<div style="background:#1e1e1e;border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">'
+        +'<div><div style="font-size:12px;font-weight:600;color:'+(done?'#50C878':'#fff')+'">'+(sess.label||'Session '+(si+1))+(done?' ✓':'')+'</div>'
+        +'<div style="font-size:11px;color:#666;margin-top:2px">'+exNames.join(' &middot; ')+more+'</div></div>'
+        +(done?'':'<button onclick="event.stopPropagation();showPage(\'active\',document.querySelectorAll(\'.nav button\')[1]);setTimeout(()=>startSession(\''+today+'\','+si+'),200)" style="background:#4A9EFF;border:none;color:#fff;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap">Start</button>')
+        +'</div>';
+    });
+    todayHtml='<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Today</div>'+todayHtml+'</div>';
+  }
+
+  // Progress ring SVG
+  const radius=28,circ=2*Math.PI*radius;
+  const filled=circ*(1-pct/100);
+  const ringHtml='<svg width="72" height="72" viewBox="0 0 72 72" style="flex-shrink:0">'
+    +'<circle cx="36" cy="36" r="'+radius+'" fill="none" stroke="#333" stroke-width="5"/>'
+    +'<circle cx="36" cy="36" r="'+radius+'" fill="none" stroke="#4A9EFF" stroke-width="5"'
+    +' stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+filled.toFixed(1)+'"'
+    +' stroke-linecap="round" transform="rotate(-90 36 36)"/>'
+    +'<text x="36" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">'+pct+'%</text>'
+    +'</svg>';
+
+  el.innerHTML='<div class="program-card">'
+    +'<div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">'
+    +ringHtml
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+    +'<div class="program-name">'+active.name+'</div>'
+    +'<div class="program-week">Week '+currentWeek+' of '+active.totalWeeks+'</div>'
+    +'</div>'
+    +'<div class="program-focus" style="margin-bottom:6px">'+active.focus+'</div>'
+    +'<div style="font-size:12px;color:#888">'+(active.completedWorkouts||0)+' of '+active.totalWorkouts+' sessions done</div>'
+    +'</div>'
+    +'</div>'
+    +todayHtml
+    +'<button class="btn" onclick="showPage(\'active\',document.querySelectorAll(\'.nav button\')[1])">Jump to Active Program</button>'
+    +'</div>';
 }
 
 function renderSurfStats(){
@@ -892,10 +943,11 @@ function renderCalendars(){
   getMindfulness().forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'🌬️');});
   getSports().forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'🏅');});
   getBooks().forEach(b=>{(b.pageLogs||[]).forEach(l=>{const d=new Date(l.date);if(d.getFullYear()===year&&d.getMonth()===month)addCalEmoji(year,month,d.getDate(),'📚');});});
+  getLanguage().forEach(l=>{const d=new Date(l.date);if(d.getFullYear()===year&&d.getMonth()===month){const flag=l.language==='German'?'🇩🇪':'🇪🇸';addCalEmoji(year,month,d.getDate(),flag);}});
 
   grid.appendChild(buildLegend([
     ['🏋️','Gym'],['🏊','Swim'],['🏃','Run'],['⚡','Hyrox'],
-    ['🌊','Surf'],['🧘','Mob'],['🌬️','Mind'],['🏅','Sport'],['📚','Read']
+    ['🌊','Surf'],['🧘','Mob'],['🌬️','Mind'],['🏅','Sport'],['📚','Read'],['🇪🇸','Spanish'],['🇩🇪','German']
   ]));
 }
 
@@ -929,7 +981,17 @@ function renderActiveProgramOverview(program,body){
     let cls='week-strip-day';
     if(allDone)cls+=' completed';else if(isToday&&hasWorkout)cls+=' today';
     if(!hasWorkout)cls+=' rest';
-    return '<div class="'+cls+'" onclick="'+(hasWorkout?'selectActiveDay(\''+dateKey+'\')':'')+'"><div class="wsd-name">'+DAY_NAMES[d]+'</div><div class="wsd-date">'+parseInt(dateKey.split('-')[2])+'</div>'+(allDone?'<div class="wsd-tick">&#10003;</div>':hasWorkout?'<div class="wsd-dot"></div>':'')+'</div>';
+    // Pick dot colour based on primary session type
+    let dotColor='#4A9EFF';
+    if(hasWorkout&&!allDone){
+      const primaryType=(dayData.sessions.find(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock)||{}).type||'gym';
+      const t=primaryType.toLowerCase();
+      if(t==='swim'||t==='swimming')dotColor='#64C8FF';
+      else if(t==='run'||t==='running')dotColor='#FF8C00';
+      else if(t==='mobility')dotColor='#FFC864';
+      else if(t==='hyrox')dotColor='#FF5050';
+    }
+    return '<div class="'+cls+'" onclick="'+(hasWorkout?'selectActiveDay(\''+dateKey+'\')':'')+'"><div class="wsd-name">'+DAY_NAMES[d]+'</div><div class="wsd-date">'+parseInt(dateKey.split('-')[2])+'</div>'+(allDone?'<div class="wsd-tick">&#10003;</div>':hasWorkout?'<div style="width:5px;height:5px;border-radius:50%;background:'+dotColor+';margin:2px auto 0"></div>':'')+'</div>';
   }).join('');
   let nextHtml='';
   if(isCurrentWeek){
@@ -1020,11 +1082,13 @@ function renderWorkoutLogger(program,state){
     if(group.type==='superset'){html+='<div class="log-superset-group"><div class="log-superset-label">Superset '+group.label+'</div>';group.exercises.forEach(({ex,exIdx})=>{html+=renderLogExCard(ex,state.sessionIdx,exIdx,prevWorkouts,weekNum);});html+='</div>';}
     else{html+=renderLogExCard(group.ex,state.sessionIdx,group.exIdx,prevWorkouts,weekNum);}
   });
-  html+='<button class="btn" style="margin-top:24px" onclick="finishSession(\''+program.id+'\',\''+state.dateKey+'\','+state.sessionIdx+')">Finish '+sessionLabel+'</button>';
+  const hasSaved=!!localStorage.getItem('tt_log_'+state.dateKey+'_'+state.sessionIdx);
+  html+=(hasSaved?'<div style="font-size:11px;color:#50C878;text-align:center;margin-bottom:8px;margin-top:16px">&#10003; Progress auto-saved</div>':'');
+  html+='<button class="btn" style="margin-top:8px" onclick="finishSession(\''+program.id+'\',\''+state.dateKey+'\','+state.sessionIdx+')">Finish '+sessionLabel+'</button>';
   body.innerHTML=html;
 }
 
-function markMobBlockDone(){mobBlocksDone['mob']='done';const btn=document.querySelector('.mob-block-done-btn');if(btn){btn.textContent='Mobility Complete';btn.classList.add('completed');btn.disabled=true;}}
+function markMobBlockDone(){mobBlocksDone['mob']='done';const btn=document.querySelector('.mob-block-done-btn');if(btn){btn.textContent='Mobility Complete';btn.classList.add('completed');btn.disabled=true;}autoSaveLog();}
 
 function groupExercisesForLog(exercises){
   const groups=[],processed=new Set();
@@ -1060,7 +1124,7 @@ function renderLogExCard(ex,sessionIdx,exIdx,prevWorkouts,weekNum){
     for(let s=0;s<sets;s++){
       const key=sessionIdx+'_'+exIdx+'_'+s;
       const prev=prevBest?prevBest[s]||prevBest[prevBest.length-1]:null;
-      setsHtml+='<div class="log-set-row"><div class="log-set-label">Set '+(s+1)+'</div><input class="log-set-input" type="'+(unit==='reptime'?'text':'number')+'" step="'+(unit==='metres'?'0.01':'any')+'" min="0" value="'+(logData[key]||'')+'" oninput="logData[\''+key+'\']=this.value;checkPRInput(this,\''+exData.name+'\',parseFloat(this.value))"><div class="log-set-unit">'+unitStr+'</div>'+(prev?'<div class="log-set-prev">prev: '+prev+unitStr+'</div>':'')+'</div>';
+      setsHtml+='<div class="log-set-row"><div class="log-set-label">Set '+(s+1)+'</div><input class="log-set-input" type="'+(unit==='reptime'?'text':'number')+'" step="'+(unit==='metres'?'0.01':'any')+'" min="0" value="'+(logData[key]||'')+'" oninput="logData[\''+key+'\']=this.value;checkPRInput(this,\''+exData.name+'\',parseFloat(this.value));autoSaveLog()"><div class="log-set-unit">'+unitStr+'</div>'+(prev?'<div class="log-set-prev">prev: '+prev+unitStr+'</div>':'')+'</div>';
     }
   }
   const overrideBadge=isOverride?'<span style="font-size:10px;background:rgba(255,170,50,0.15);color:#FFAA32;padding:2px 7px;border-radius:10px;margin-left:6px">Wk'+weekNum+' override</span>':'';
@@ -1071,6 +1135,7 @@ function toggleTick(sessionIdx,exIdx,setIdx,btn){
   const key=sessionIdx+'_'+exIdx+'_'+setIdx;
   tickState[key]=!tickState[key];
   if(tickState[key]){btn.innerHTML='&#10003;';btn.classList.add('ticked');}else{btn.innerHTML='';btn.classList.remove('ticked');}
+  autoSaveLog();
 }
 
 function getPrevBest(exId,reps,prevWorkouts){
@@ -1119,7 +1184,8 @@ async function finishSession(programId,dateKey,sessionIdx){
   program.completedWorkouts=(program.completedWorkouts||0)+1;
   await saveProgram(program);
   await saveWorkout({id:'W'+Date.now(),date:todayStr(),type:session.type||'gym',name:(dayData.name||'Workout')+(session.label?' - '+session.label:''),totalKg,exercises:[]});
-  activeLogState=null;mobBlocksDone={};tickState={};renderProgramCard();renderTrainingStats();
+  clearSavedLog(dateKey,sessionIdx);activeLogState=null;mobBlocksDone={};tickState={};renderProgramCard();renderTrainingStats();
+  launchConfetti();
   const body=document.getElementById('active-body');
   const prHtml=newPRs.length>0?'<div class="pr-summary-card"><div class="pr-summary-title">New Personal Records!</div>'+newPRs.map(pr=>'<div class="pr-summary-row">'+pr.name+' - '+pr.val+pr.unit+'</div>').join('')+'</div>':'';
   body.innerHTML='<div style="text-align:center;padding:30px 0 20px"><div style="font-size:48px;margin-bottom:12px">&#x1F3C6;</div><div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">Session Complete!</div><div style="font-size:14px;color:#888">'+(session.label||dayData.name||'Great work')+'</div></div>'+prHtml+'<div class="stat-grid"><div class="stat-card"><div class="stat-label">Volume</div><div class="stat-value">'+totalKg.toLocaleString()+'<span class="stat-inline-unit">kg</span></div></div><div class="stat-card"><div class="stat-label">PRs Set</div><div class="stat-value" style="color:#50C878">'+newPRs.length+'</div></div></div><button class="btn" style="margin-top:16px" onclick="activeWeekOffset=0;renderActiveProgram()">Back to Program</button>';
@@ -1273,13 +1339,31 @@ function initBuilder(existing){
 function renderBuilder(){
   const wrap=document.getElementById('builder-wrap');if(!wrap)return;
   const sl=['Details','Days','Phases','Review'];
-  const sh=sl.map((l,i)=>{const s=i+1;const cls=s<builderState.step?'done':s===builderState.step?'active':'';return '<div class="builder-step '+cls+'">'+(s<builderState.step?'Done ':s===builderState.step?'> ':'')+l+'</div>';}).join('');
+  const sh=sl.map((l,i)=>{
+    const s=i+1;
+    const cls=s<builderState.step?'done':s===builderState.step?'active':'';
+    // Only allow clicking on completed steps (going back) or current step
+    const clickable=s<=builderState.step;
+    const cursor=clickable?'cursor:pointer;':'cursor:default;';
+    const onclick=clickable?'onclick="jumpBuilderStep('+s+')"':'';
+    return '<div class="builder-step '+cls+'" '+onclick+' style="'+cursor+'">'+(s<builderState.step?'&#10003; ':s===builderState.step?'&#9679; ':'&#9675; ')+l+'</div>';
+  }).join('');
   wrap.innerHTML='<div class="builder-steps">'+sh+'</div><div id="builder-body"></div>';
   const body=document.getElementById('builder-body');
   if(builderState.step===1)renderStep1(body);
   if(builderState.step===2)renderStep2(body);
   if(builderState.step===3)renderStep3(body);
   if(builderState.step===4)renderStep4(body);
+}
+
+function jumpBuilderStep(s){
+  if(s>builderState.step)return; // can't jump forward past current
+  // Save any unsaved step 1 data if jumping from step 1
+  if(builderState.step===1&&s!==1){
+    const name=document.getElementById('b-name');
+    if(name&&name.value.trim())builderState.program.name=name.value.trim();
+  }
+  builderState.step=s;renderBuilder();
 }
 
 function renderStep1(body){
@@ -1417,7 +1501,7 @@ function renderDayBody(){
           group.indices.forEach((ei,pos)=>{
             const ex=exercises[ei];const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
             // BUG FIX #5: swap button available inside supersets too
-            html+='<div class="session-exercise-row"><div class="se-reorder-btns"><button class="se-reorder-btn" onclick="moveExercise(\''+activeDayKey+'\','+si+','+ei+',-1)">^</button><button class="se-reorder-btn" onclick="moveExercise(\''+activeDayKey+'\','+si+','+ei+',1)">v</button></div><div style="flex:1"><span class="se-superset-badge">'+group.label+(pos+1)+'</span><span class="se-name">'+exData.name+'</span><div class="se-prescription" style="margin-top:2px">'+formatPrescription(exData.unit,ex)+'</div>'+(ex.notes?'<div class="se-notes">'+ex.notes+'</div>':'')+'</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><button class="se-remove-btn" onclick="removeCalExercise(\''+activeDayKey+'\','+si+','+ei+')">x</button><button class="se-edit-btn" onclick="openEditExerciseInSession(\''+activeDayKey+'\','+si+','+ei+')">Edit</button>'+(weekIdx>0?'<button onclick="openSwapExercise(\''+activeDayKey+'\','+si+','+ei+')" style="background:none;border:none;color:#FFAA32;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Swap wk'+(weekIdx+1)+'</button>':'')+'<button onclick="unlinkSuperset(\''+activeDayKey+'\','+si+','+ei+')" style="background:none;border:none;color:#555;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button></div></div>';
+            html+='<div class="session-exercise-row"><div class="se-reorder-btns"><button class="se-reorder-btn" onclick="moveExercise(\''+activeDayKey+'\','+si+','+ei+',-1)">^</button><button class="se-reorder-btn" onclick="moveExercise(\''+activeDayKey+'\','+si+','+ei+',1)">v</button></div><div style="flex:1"><span class="se-superset-badge">'+group.label+(pos+1)+'</span><span class="se-name">'+exData.name+'</span><div class="se-prescription" style="margin-top:2px">'+formatPrescription(exData.unit,ex)+'</div>'+(ex.notes?'<div class="se-notes">'+ex.notes+'</div>':'')+'</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><button class="se-remove-btn" onclick="removeCalExercise(\''+activeDayKey+'\','+si+','+ei+')">x</button><button class="se-edit-btn" onclick="openEditExerciseInSession(\''+activeDayKey+'\','+si+','+ei+')">Edit</button>'+(weekIdx>0?'<button onclick="openSwapExercise(\''+activeDayKey+'\','+si+','+ei+')" style="background:none;border:none;color:#FFAA32;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Swap wk'+(weekIdx+1)+'</button>':'')+'<button onclick="openSupersetPicker(\''+activeDayKey+'\','+si+','+ei+')" style="background:none;border:none;color:#4A9EFF;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">+ Add</button><button onclick="unlinkSuperset(\''+activeDayKey+'\','+si+','+ei+')" style="background:none;border:none;color:#555;font-size:10px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">Unlink</button></div></div>';
           });
           html+='</div>';
         } else {
@@ -1503,17 +1587,31 @@ function removeMobilityBlock(dk,si){const day=getDayData(dk);if(!day)return;dele
 function openSupersetPicker(dk,si,ei){
   const day=getDayData(dk);if(!day)return;
   const session=day.sessions[si];
-  const others=(session.exercises||[]).map((e,idx)=>({e,idx})).filter(({e,idx})=>idx!==ei&&!e.supersetGroup);
+  const thisGroup=(session.exercises[ei]||{}).supersetGroup;
+  // Can link to: ungrouped exercises, OR exercises in the same existing group (to extend it)
+  const others=(session.exercises||[]).map((e,idx)=>({e,idx})).filter(({e,idx})=>{
+    if(idx===ei)return false;
+    if(!e.supersetGroup)return true; // ungrouped — can always join
+    if(thisGroup&&e.supersetGroup===thisGroup)return false; // already in same group
+    return false; // in a different group — can't merge groups
+  });
   const modal=document.getElementById('exercise-modal'),box=document.getElementById('exercise-modal-box');
-  box.innerHTML='<div class="modal-title">Link as Superset</div><div style="font-size:13px;color:#888;margin-bottom:16px">Choose an exercise to pair with</div>'+(others.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No available exercises.</div>':others.map(({e,idx})=>{const exData=getExercises().find(ex=>ex.id===e.exId);if(!exData)return '';return '<div class="picker-exercise-row" onclick="linkSuperset(\''+dk+'\','+si+','+ei+','+idx+');document.getElementById(\'exercise-modal\').style.display=\'none\'"><div><div class="picker-ex-name">'+exData.name+'</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>';}).join(''))+'<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById(\'exercise-modal\').style.display=\'none\'">Cancel</button>';
+  const groupLabel=thisGroup?'Add to Superset '+thisGroup:'Link as Superset';
+  const subLabel=thisGroup?'Add another exercise to Superset '+thisGroup:'Choose an exercise to pair with';
+  box.innerHTML='<div class="modal-title">'+groupLabel+'</div><div style="font-size:13px;color:#888;margin-bottom:16px">'+subLabel+'</div>'+(others.length===0?'<div style="color:#666;font-size:14px;padding:12px 0">No available exercises to add.</div>':others.map(({e,idx})=>{const exData=getExercises().find(ex=>ex.id===e.exId);if(!exData)return '';return '<div class="picker-exercise-row" onclick="linkSuperset(\''+dk+'\','+si+','+ei+','+idx+');document.getElementById(\'exercise-modal\').style.display=\'none\'"><div><div class="picker-ex-name">'+exData.name+'</div></div><span style="color:#4A9EFF;font-size:18px">+</span></div>';}).join(''))+'<button class="btn" style="background:#3a3a3a;color:#888;margin-top:12px" onclick="document.getElementById(\'exercise-modal\').style.display=\'none\'">Cancel</button>';
   modal.style.display='flex';
 }
 
 function linkSuperset(dk,si,ei1,ei2){
   const day=getDayData(dk);if(!day)return;
   const session=day.sessions[si];
-  const used=new Set((session.exercises||[]).map(e=>e.supersetGroup).filter(Boolean));
-  let letter='A';while(used.has(letter))letter=String.fromCharCode(letter.charCodeAt(0)+1);
+  // Use existing group if either exercise already has one, otherwise create new
+  const existingGroup=session.exercises[ei1].supersetGroup||session.exercises[ei2].supersetGroup;
+  let letter=existingGroup;
+  if(!letter){
+    const used=new Set((session.exercises||[]).map(e=>e.supersetGroup).filter(Boolean));
+    letter='A';while(used.has(letter))letter=String.fromCharCode(letter.charCodeAt(0)+1);
+  }
   session.exercises[ei1].supersetGroup=letter;session.exercises[ei2].supersetGroup=letter;renderDayBody();
 }
 
@@ -1697,7 +1795,7 @@ async function saveProgramToDb(status){
 }
 
 function showStlSection(section,btn){
-  ['surfing','mobility','reading','mindfulness','sports'].forEach(s=>document.getElementById('stl-'+s).style.display='none');
+  ['surfing','mobility','reading','mindfulness','sports','language'].forEach(s=>document.getElementById('stl-'+s).style.display='none');
   document.querySelectorAll('#stl .sub-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('stl-'+section).style.display='block';
   if(btn)btn.classList.add('active');
@@ -1706,6 +1804,7 @@ function showStlSection(section,btn){
   if(section==='reading')renderStlReading();
   if(section==='mindfulness')renderStlMindfulness();
   if(section==='sports')renderStlSports();
+  if(section==='language')renderStlLanguage();
 }
 
 let stlSurfView='list',stlSurfDetailId=null;
@@ -1725,8 +1824,29 @@ function renderStlSurfing(){
     body.innerHTML='<button class="detail-back-btn" onclick="stlSurfView=\'list\';renderStlSurfing()">Cancel</button><div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log a Surf</div><div class="field-label">Date</div><input class="field-input" id="surf-date" type="date" value="'+todayStr()+'"><div class="field-label">Location</div><input class="field-input" id="surf-loc" type="text" placeholder="e.g. Bondi Beach"><div class="field-label">Duration (minutes)</div><input class="field-input" id="surf-dur" type="number" placeholder="60" min="1"><div class="field-label">Swell Comments</div><input class="field-input" id="surf-swell" type="text" placeholder="e.g. 2-3ft, offshore winds"><div class="field-label">Session Notes</div><textarea class="field-input" id="surf-notes" rows="3" placeholder="How did it go?"></textarea><button class="btn" style="margin-top:16px" onclick="saveStlSurf()">Save Surf</button>';
     return;
   }
-  body.innerHTML='<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Surfs</div><div class="stat-value">'+surfs.length+'</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">'+ms.length+'</div></div><div class="stat-card" style="grid-column:span 2"><div class="stat-label">Total Time in Water</div><div class="stat-value" style="font-size:20px">'+fmt(totalMins)+'</div></div></div><button class="btn" onclick="stlSurfView=\'add\';renderStlSurfing()">+ Log New Surf</button><div class="section-title" style="margin-top:20px">Surf Log</div>'+(surfs.length===0?'<div class="empty-state"><p>No surfs logged yet.</p></div>':surfs.map(s=>'<div class="entry-list-item" onclick="stlSurfDetailId=\''+s.id+'\';stlSurfView=\'detail\';renderStlSurfing()"><div><div class="entry-ref">'+s.id+'</div><div class="entry-title">'+s.location+'</div><div class="entry-sub">'+dateDisplay(s.date,{day:'numeric',month:'short',year:'numeric'})+' &middot; '+fmt(s.duration||0)+'</div></div><div class="entry-chevron">></div></div>').join(''));
+  // Group surfs by month
+  const monthGroups={};
+  surfs.forEach(s=>{
+    const d=new Date(s.date);
+    const mk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const lbl=MON_NAMES[d.getMonth()]+' '+d.getFullYear();
+    if(!monthGroups[mk])monthGroups[mk]={label:lbl,surfs:[]};
+    monthGroups[mk].surfs.push(s);
+  });
+  const monthKeys=Object.keys(monthGroups).sort((a,b)=>b.localeCompare(a));
+  let surfHtml='';
+  if(!surfs.length){surfHtml='<div class="empty-state"><p>No surfs logged yet.</p></div>';}
+  else{monthKeys.forEach((mk,mi)=>{const grp=monthGroups[mk];const gId='surf-mon-'+mk;const open=mi===0;surfHtml+='<div style="margin-bottom:8px"><div onclick="toggleSurfMonth(\''+gId+'\');" style="display:flex;justify-content:space-between;align-items:center;background:#222;border-radius:10px;padding:12px 14px;cursor:pointer"><div style="font-size:14px;font-weight:600;color:#fff">'+grp.label+'</div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#666">'+grp.surfs.length+' surf'+(grp.surfs.length!==1?'s':'')+'</span><span id="chev-'+gId+'" style="font-size:12px;color:#666">'+(open?'&#94;':'v')+'</span></div></div><div id="'+gId+'" style="display:'+(open?'block':'none')+';padding-top:4px">'+grp.surfs.map(s=>'<div class="entry-list-item" onclick="stlSurfDetailId=\''+s.id+'\';stlSurfView=\'detail\';renderStlSurfing()"><div><div class="entry-title">'+s.location+'</div><div class="entry-sub">'+dateDisplay(s.date,{weekday:\'short\',day:\'numeric\',month:\'short\'})+' &middot; '+fmt(s.duration||0)+'</div></div><div class="entry-chevron">></div></div>').join('')+'</div></div>';});}
+  body.innerHTML='<div class="stat-grid" style="margin-top:16px"><div class="stat-card"><div class="stat-label">Total Surfs</div><div class="stat-value">'+surfs.length+'</div></div><div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">'+ms.length+'</div></div><div class="stat-card" style="grid-column:span 2"><div class="stat-label">Total Time in Water</div><div class="stat-value" style="font-size:20px">'+fmt(totalMins)+'</div></div></div><button class="btn" onclick="stlSurfView=\'add\';renderStlSurfing()">+ Log New Surf</button><div class="section-title" style="margin-top:20px">Surf Log</div>'+surfHtml;
 }
+function toggleSurfMonth(id){
+  const el=document.getElementById(id),chev=document.getElementById('chev-'+id);
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(chev)chev.textContent=open?'v':'^';
+}
+
 async function saveStlSurf(){const s={id:'SURF'+Date.now(),date:document.getElementById('surf-date').value,location:document.getElementById('surf-loc').value.trim()||'Unknown',duration:parseInt(document.getElementById('surf-dur').value)||0,swellComments:document.getElementById('surf-swell').value.trim(),comments:document.getElementById('surf-notes').value.trim()};await saveSurf(s);stlSurfView='list';renderStlSurfing();renderSurfStats();renderCalendars();}
 async function deleteStlSurf(id){if(!confirm('Delete?'))return;await deleteSurf(id);stlSurfView='list';renderStlSurfing();renderSurfStats();renderCalendars();}
 
@@ -1808,6 +1928,147 @@ function renderStlSports(){
 }
 async function saveStlSport(){const sport=document.getElementById('sport-name').value.trim();if(!sport){alert('Please enter a sport name');return;}const s={id:'SPORT'+Date.now(),sport,date:document.getElementById('sport-date').value,notes:document.getElementById('sport-notes').value.trim()};await saveSport(s);stlSportsView='list';renderStlSports();renderCalendars();}
 async function deleteStlSport(id){if(!confirm('Delete?'))return;await deleteSport(id);renderStlSports();renderCalendars();}
+
+function launchConfetti(){
+  const canvas=document.createElement('canvas');
+  canvas.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:999;';
+  document.body.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  const pieces=[];
+  const colours=['#4A9EFF','#50C878','#FFAA32','#FF5050','#FF6496','#64DCC8','#FFC864'];
+  for(let i=0;i<120;i++){
+    pieces.push({
+      x:Math.random()*canvas.width,
+      y:-10-Math.random()*canvas.height*0.5,
+      w:6+Math.random()*8,h:6+Math.random()*8,
+      r:Math.random()*Math.PI*2,
+      vx:(Math.random()-0.5)*4,
+      vy:2+Math.random()*4,
+      vr:(Math.random()-0.5)*0.2,
+      color:colours[Math.floor(Math.random()*colours.length)],
+      opacity:1
+    });
+  }
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;p.vy+=0.05;
+      if(frame>60)p.opacity=Math.max(0,p.opacity-0.012);
+      ctx.save();ctx.globalAlpha=p.opacity;ctx.translate(p.x,p.y);ctx.rotate(p.r);
+      ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx.restore();
+    });
+    frame++;
+    if(frame<150)requestAnimationFrame(draw);
+    else canvas.remove();
+  }
+  draw();
+}
+
+let stlLangView='list';
+function renderStlLanguage(){
+  const body=document.getElementById('stl-lang-body');
+  const entries=[...getLanguage()].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
+  const mc=entries.filter(e=>{const d=new Date(e.date);return d.getMonth()===tm&&d.getFullYear()===ty;});
+  const totalMins=entries.reduce((s,e)=>s+(e.duration||0),0);
+  const typeCounts={};entries.forEach(e=>{typeCounts[e.type]=(typeCounts[e.type]||0)+1;});
+  const topType=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1])[0];
+  const fmt=m=>m>=60?Math.floor(m/60)+'h'+(m%60>0?String(m%60).padStart(2,'0')+'m':''):m+'m';
+
+  if(stlLangView==='add'){
+    body.innerHTML='<button class="detail-back-btn" onclick="stlLangView=\'list\';renderStlLanguage()">Cancel</button>'
+      +'<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:20px">Log Language Practice</div>'
+      +'<div class="field-label">Language</div>'
+      +'<select class="field-input" id="lang-language">'
+      +'<option value="Spanish">&#x1F1EA;&#x1F1F8; Spanish</option>'
+      +'<option value="German">&#x1F1E9;&#x1F1EA; German</option>'
+      +'</select>'
+      +'<div class="field-label">Activity Type</div>'
+      +'<select class="field-input" id="lang-type">'
+      +'<option value="Podcast">&#x1F4AC; Podcast</option>'
+      +'<option value="YouTube">&#x1F4AC; YouTube</option>'
+      +'<option value="Reading">&#x1F4AC; Reading</option>'
+      +'<option value="Speaking">&#x1F4AC; Speaking</option>'
+      +'<option value="Lesson">&#x1F4AC; Lesson</option>'
+      +'</select>'
+      +'<div class="field-label">Duration (minutes)</div>'
+      +'<input class="field-input" id="lang-duration" type="number" placeholder="30" min="1">'
+      +'<div class="field-label">Date</div>'
+      +'<input class="field-input" id="lang-date" type="date" value="'+todayStr()+'">'
+      +'<div class="field-label">Notes <span style="color:#666;font-weight:400">(optional)</span></div>'
+      +'<input class="field-input" id="lang-notes" type="text" placeholder="e.g. Episode 12, chapter 3, conversation with...">'
+      +'<button class="btn" style="margin-top:16px" onclick="saveStlLanguage()">Save</button>';
+    return;
+  }
+
+  // Group by month
+  const monthGroups={};
+  entries.forEach(e=>{
+    const d=new Date(e.date);
+    const mk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const lbl=MON_NAMES[d.getMonth()]+' '+d.getFullYear();
+    if(!monthGroups[mk])monthGroups[mk]={label:lbl,entries:[]};
+    monthGroups[mk].entries.push(e);
+  });
+  const monthKeys=Object.keys(monthGroups).sort((a,b)=>b.localeCompare(a));
+  const typeEmoji={Podcast:'💬',YouTube:'💬',Reading:'💬',Speaking:'💬',Lesson:'💬'};const langFlag={'Spanish':'🇪🇸','German':'🇩🇪'};
+  let listHtml='';
+  if(!entries.length){listHtml='<div class="empty-state"><p>No language practice logged yet.</p></div>';}
+  else{
+    monthKeys.forEach((mk,mi)=>{
+      const grp=monthGroups[mk];
+      const gId='lang-mon-'+mk;
+      const open=mi===0;
+      const grpMins=grp.entries.reduce((s,e)=>s+(e.duration||0),0);
+      listHtml+='<div style="margin-bottom:8px">'
+        +'<div onclick="toggleLangMonth(\''+gId+'\')" style="display:flex;justify-content:space-between;align-items:center;background:#222;border-radius:10px;padding:12px 14px;cursor:pointer">'
+        +'<div style="font-size:14px;font-weight:600;color:#fff">'+grp.label+'</div>'
+        +'<div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#666">'+grp.entries.length+' sessions &middot; '+fmt(grpMins)+'</span><span id="chev-'+gId+'" style="font-size:12px;color:#666">'+(open?'&#94;':'v')+'</span></div>'
+        +'</div>'
+        +'<div id="'+gId+'" style="display:'+(open?'block':'none')+';padding-top:4px">'
+        +grp.entries.map(e=>'<div class="entry-list-item" style="cursor:default">'
+          +'<div><div class="entry-title">'+(langFlag[e.language]||'💬')+' '+e.type+'</div>'
+          +'<div class="entry-sub">'+(e.language||'Spanish')+' &middot; '+dateDisplay(e.date,{weekday:\'short\',day:\'numeric\',month:\'short\'})+' &middot; '+fmt(e.duration||0)+(e.notes?' &middot; '+e.notes:'')+'</div></div>'
+          +'<button onclick="deleteStlLanguage(\''+e.id+'\')" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer">x</button>'
+          +'</div>').join('')
+        +'</div></div>';
+    });
+  }
+
+  body.innerHTML='<div class="stat-grid" style="margin-top:16px">'
+    +'<div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">'+entries.length+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">'+mc.length+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label">Total Time</div><div class="stat-value" style="font-size:20px">'+fmt(totalMins)+'</div></div>'
+    +(topType?'<div class="stat-card"><div class="stat-label">Top Activity</div><div class="stat-value" style="font-size:18px">💬 '+topType[0]+'</div><div class="stat-unit">'+topType[1]+' sessions</div></div>':'<div class="stat-card"></div>')
+    +'</div>'
+    +'<button class="btn" onclick="stlLangView=\'add\';renderStlLanguage()">+ Log Language Practice</button>'
+    +'<div class="section-title" style="margin-top:20px">Practice Log</div>'
+    +listHtml;
+}
+
+function toggleLangMonth(id){
+  const el=document.getElementById(id),chev=document.getElementById('chev-'+id);
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(chev)chev.textContent=open?'v':'&#94;';
+}
+
+async function saveStlLanguage(){
+  const duration=parseInt(document.getElementById('lang-duration').value);
+  if(!duration||duration<1){alert('Please enter a duration');return;}
+  const lang=document.getElementById('lang-language').value;const l={id:'LANG'+Date.now(),date:document.getElementById('lang-date').value,type:document.getElementById('lang-type').value,language:lang,duration,notes:document.getElementById('lang-notes').value.trim()};
+  await saveLanguageEntry(l);
+  stlLangView='list';renderStlLanguage();
+}
+
+async function deleteStlLanguage(id){
+  if(!confirm('Delete?'))return;
+  await deleteLanguageEntry(id);renderStlLanguage();
+}
 
 function initApp(){
   setHeaderDate();drawSparkline();renderTrainingStats();renderInsights();
