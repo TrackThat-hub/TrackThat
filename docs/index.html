@@ -1087,7 +1087,7 @@ function renderActiveProgramOverview(program,body){
         const p=getEffectivePrescription(ex,viewWeekIndex+1);
         previewRows+='<div class="session-preview-row"><span>'+exData.name+'</span><span style="color:#4A9EFF">'+(p.sets&&p.reps?p.sets+'x'+p.reps:ex.notes||'')+'</span></div>';
       });
-      allSessionsHtml+='<div class="session-start-card" onclick="toggleSessionPreview(\''+sessionId+'\')"><div class="session-start-card-top"><div><div class="session-start-label">'+(session.label||'Session '+(si+1))+'</div><div class="session-start-meta">'+(hasMob?'Mobility + ':'')+exCount+' exercises - tap to preview</div></div>'+(done?'<button class="session-start-btn done" onclick="event.stopPropagation()">Done</button>':'<button class="session-start-btn" onclick="event.stopPropagation();startSession(\''+dateKey+'\','+si+')">Start</button>')+'</div><div class="session-exercise-preview" id="'+sessionId+'">'+(previewRows||'<div style="font-size:12px;color:#555">No exercises</div>')+'</div></div>';
+      allSessionsHtml+='<div class="session-start-card" onclick="toggleSessionPreview(\''+sessionId+'\')"><div class="session-start-card-top"><div><div class="session-start-label">'+(session.label||'Session '+(si+1))+'</div><div class="session-start-meta">'+(hasMob?'Mobility + ':'')+exCount+' exercises - tap to preview</div></div>'+(done?'<button class="session-start-btn done" onclick="event.stopPropagation();viewCompletedSession(\''+dateKey+'\','+si+',\''+program.id+'\')" style="background:rgba(80,200,120,0.15);color:#50C878">&#10003; View</button>':'<button class="session-start-btn" onclick="event.stopPropagation();startSession(\''+dateKey+'\','+si+')">Start</button>')+'</div><div class="session-exercise-preview" id="'+sessionId+'">'+(previewRows||'<div style="font-size:12px;color:#555">No exercises</div>')+'</div></div>';
     });
   });
   body.innerHTML='<div class="section-title" style="margin-top:4px">'+program.name+'</div><div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:'+Math.round(((program.completedWorkouts||0)/program.totalWorkouts)*100)+'%"></div></div>'+weekNavHtml+'<div class="week-strip">'+stripHtml+'</div>'+nextHtml+'<div class="section-title">Sessions This Week</div>'+(allSessionsHtml||'<div style="font-size:13px;color:#555;padding:8px 0">No sessions scheduled this week</div>');
@@ -1104,6 +1104,87 @@ function selectActiveDay(dateKey){
 }
 
 let logData={};
+function viewCompletedSession(dateKey,sessionIdx,programId){
+  const program=getPrograms().find(p=>p.id===programId);
+  if(!program)return;
+  const dayData=program.days&&program.days.find(d=>d.dateKey===dateKey);
+  if(!dayData)return;
+  const session=dayData.sessions[sessionIdx];
+  if(!session)return;
+
+  const body=document.getElementById('active-body');
+  const sessionLabel=session.label||'Session '+(sessionIdx+1);
+  const startDate=program.startDate||todayStr();
+  const weekNum=Math.max(1,Math.floor(diffDays(startDate,dateKey)/7)+1);
+
+  // Find all completed_workouts logged on this date
+  const cw=getCWN().filter(w=>w.date===dateKey);
+  const prs=getPRs();
+
+  let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+    +'<button class="btn-outline" style="padding:8px 14px;font-size:13px;flex:none" onclick="activeWeekOffset=0;renderActiveProgram()">Back</button>'
+    +'<div style="font-size:13px;color:#888">'+dateDisplay(dateKey,{weekday:'long',day:'numeric',month:'long'})+'</div>'
+    +'</div>'
+    +'<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">'+dayData.name+'</div>'
+    +'<div style="font-size:14px;color:#4A9EFF;margin-bottom:4px">'+sessionLabel+'</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:6px">'+program.name+' &middot; Week '+weekNum+'</div>'
+    +'<div style="font-size:11px;background:rgba(80,200,120,0.1);color:#50C878;border-radius:8px;padding:6px 12px;margin-bottom:20px;display:inline-block">&#10003; Completed '+dateDisplay(dateKey,{day:'numeric',month:'short',year:'numeric'})+'</div>';
+
+  if(cw.length===0){
+    html+='<div class="card"><p>No weight data recorded for this session.</p></div>';
+  } else {
+    const groups=groupExercisesForLog(session.exercises||[]);
+    groups.forEach(group=>{
+      const exList=group.type==='superset'?group.exercises.map(g=>({ex:g.ex,exIdx:g.exIdx})):[{ex:group.ex,exIdx:group.exIdx}];
+      if(group.type==='superset'){
+        html+='<div class="log-superset-group"><div class="log-superset-label">Superset '+group.label+'</div>';
+      }
+      exList.forEach(({ex})=>{
+        const exData=getExercises().find(e=>e.id===ex.exId);
+        if(!exData)return;
+        // find matching logged data — match by exId and date
+        const logged=cw.filter(w=>w.exId===ex.exId);
+        const entry=logged.length>0?logged[logged.length-1]:null; // most recent on that date
+        const isPR=prs.find(p=>p.exercise===exData.name&&entry&&p.weight===entry.maxVal&&p.date===dateKey);
+        const unit=exData.unit;
+        const unitStr=unit==='kg'?'kg':unit==='metres'?'m':unit==='reptime'?'time':'';
+
+        html+='<div class="log-exercise-card">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">';
+        html+='<div><div class="log-ex-name">'+exData.name+(isPR?' <span style="font-size:11px;background:rgba(80,200,120,0.2);color:#50C878;padding:2px 7px;border-radius:10px;margin-left:4px">PR</span>':'')+'</div>';
+        if(entry&&entry.reps)html+='<div class="log-ex-prescribed">'+ex.sets+'x'+entry.reps+(unitStr?' x '+unitStr:'')+'</div>';
+        html+='</div></div>';
+
+        if(!entry){
+          html+='<div style="font-size:13px;color:#555">No data recorded</div>';
+        } else if(unit==='tick'){
+          const completed=(entry.sets||[]).filter(v=>v===1).length;
+          const total=(entry.sets||[]).length;
+          html+='<div style="font-size:14px;color:#50C878;font-weight:600">'+completed+' of '+total+' sets completed &#10003;</div>';
+        } else if(unit==='duration'||unit==='hyrox'){
+          html+='<div class="log-set-row"><div class="log-set-label">Time</div><div style="font-size:15px;font-weight:600;color:#fff">'+(entry.sets&&entry.sets[0]?entry.sets[0]:'--')+'</div></div>';
+        } else {
+          (entry.sets||[]).forEach((val,s)=>{
+            const prSet=unit==='kg'&&val===entry.maxVal&&isPR;
+            html+='<div class="log-set-row">'
+              +'<div class="log-set-label">Set '+(s+1)+'</div>'
+              +'<div style="font-size:15px;font-weight:600;color:'+(prSet?'#50C878':'#fff')+'">'+val+unitStr+'</div>'
+              +(entry.reps?'<div class="log-set-unit">&times; '+entry.reps+' reps</div>':'')
+              +'</div>';
+          });
+          if(entry.maxVal)html+='<div style="font-size:11px;color:#888;margin-top:6px">Best set: '+entry.maxVal+unitStr+'</div>';
+        }
+        html+='</div>';
+      });
+      if(group.type==='superset') html+='</div>';
+    });
+  }
+
+  html+='<button class="btn" style="margin-top:16px" onclick="startSession(\''+dateKey+'\','+sessionIdx+')">Redo This Session</button>';
+  body.innerHTML=html;
+}
+
+
 function startSession(dateKey,sessionIdx){logData={};mobBlocksDone={};tickState={};activeLogState={dateKey,sessionIdx};renderActiveProgram();}
 
 function renderWorkoutLogger(program,state){
@@ -1233,11 +1314,16 @@ async function finishSession(programId,dateKey,sessionIdx){
   program.completedWorkouts=(program.completedWorkouts||0)+1;
   await saveProgram(program);
   await saveWorkout({id:'W'+Date.now(),date:todayStr(),type:session.type||'gym',name:(dayData.name||'Workout')+(session.label?' - '+session.label:''),totalKg,exercises:[]});
-  clearSavedLog(dateKey,sessionIdx);activeLogState=null;mobBlocksDone={};tickState={};renderProgramCard();renderTrainingStats();
-  launchConfetti();
+  clearSavedLog(dateKey,sessionIdx);
+  // Set summary first, THEN update background state so nothing wipes the page
+  activeLogState=null;mobBlocksDone={};tickState={};
   const body=document.getElementById('active-body');
   const prHtml=newPRs.length>0?'<div class="pr-summary-card"><div class="pr-summary-title">New Personal Records!</div>'+newPRs.map(pr=>'<div class="pr-summary-row">'+pr.name+' - '+pr.val+pr.unit+'</div>').join('')+'</div>':'';
-  body.innerHTML='<div style="text-align:center;padding:30px 0 20px"><div style="font-size:48px;margin-bottom:12px">&#x1F3C6;</div><div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">Session Complete!</div><div style="font-size:14px;color:#888">'+(session.label||dayData.name||'Great work')+'</div></div>'+prHtml+'<div class="stat-grid"><div class="stat-card"><div class="stat-label">Volume</div><div class="stat-value">'+totalKg.toLocaleString()+'<span class="stat-inline-unit">kg</span></div></div><div class="stat-card"><div class="stat-label">PRs Set</div><div class="stat-value" style="color:#50C878">'+newPRs.length+'</div></div></div><button class="btn" style="margin-top:16px" onclick="activeWeekOffset=0;renderActiveProgram()">Back to Program</button>';
+  body.innerHTML='<div style="text-align:center;padding:30px 0 20px"><div style="font-size:56px;margin-bottom:12px">&#x1F3C6;</div><div style="font-size:24px;font-weight:700;color:#fff;margin-bottom:4px">Session Complete!</div><div style="font-size:14px;color:#888">'+(session.label||dayData.name||'Great work')+'</div></div>'+prHtml+'<div class="stat-grid"><div class="stat-card"><div class="stat-label">Volume</div><div class="stat-value">'+totalKg.toLocaleString()+'<span class="stat-inline-unit">kg</span></div></div><div class="stat-card"><div class="stat-label">PRs Set</div><div class="stat-value" style="color:#50C878">'+newPRs.length+'</div></div></div><button class="btn" style="margin-top:16px" onclick="activeWeekOffset=0;renderActiveProgram()">Back to Program</button>';
+  // Launch confetti after DOM is ready
+  setTimeout(()=>launchConfetti(),50);
+  // Update stats in background without re-rendering the active page
+  renderProgramCard();renderTrainingStats();
 }
 
 let historyView='list',historyExId=null;
@@ -2001,7 +2087,7 @@ function renderStlReading(){
     +' stroke-dasharray="'+readCirc.toFixed(1)+'" stroke-dashoffset="'+readOffset.toFixed(1)+'"'
     +' stroke-linecap="round" transform="rotate(-90 42 42)"/>'
     +'<text x="42" y="38" text-anchor="middle" font-size="18" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">'+booksFinishedThisMonth+'</text>'
-    +'<text x="42" y="54" text-anchor="middle" font-size="9" fill="#888" font-family="-apple-system,sans-serif">of '+readTarget+' this mo</text>'
+    +'<text x="42" y="54" text-anchor="middle" font-size="9" fill="#888" font-family="-apple-system,sans-serif">this month</text>'
     +'</svg>'
     +'<div style="flex:1"><div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">This Month</div>'
     +'<div style="font-size:16px;font-weight:700;color:'+readColor+'">'+(readOver?'Target hit!':booksFinishedThisMonth+' of '+readTarget+' book'+(readTarget!==1?'s':''))+'</div>'
