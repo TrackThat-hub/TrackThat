@@ -1058,18 +1058,49 @@ function setCompletionDate(v){
   autoSaveLog();autoSaveFreeform();
   renderActiveProgram();
 }
-// Reusable date picker shown in both loggers
+// Sliding date strip: +/- 5 days around the scheduled date.
+// Hidden entirely when you're logging on the day it was scheduled for.
 function completionDatePicker(scheduledKey){
-  const cd=getCompletionDate();
-  const differs=cd!==scheduledKey;
+  const today=todayStr();
+  const chosen=getCompletionDate();
+  // On the day it was due and not overridden - no picker needed
+  if(scheduledKey===today&&chosen===today)return '';
+
+  const days=[];
+  for(let i=-5;i<=5;i++)days.push(addDays(scheduledKey,i));
+  // Make sure today is reachable even if it fell outside the window
+  if(!days.includes(today)){days.push(today);days.sort();}
+
+  const blocks=days.map(dk=>{
+    const on=dk===chosen;
+    const isToday=dk===today;
+    const isSched=dk===scheduledKey;
+    const d=new Date(dk.split('-')[0],Number(dk.split('-')[1])-1,dk.split('-')[2]);
+    const border=on?'#4A9EFF':isSched?'#3a3a3a':'transparent';
+    const bg=on?'rgba(74,158,255,0.15)':'#1e1e1e';
+    return '<button onclick="setCompletionDate(\''+dk+'\')" style="flex:0 0 auto;scroll-snap-align:center;background:'+bg+';border:1.5px solid '+border+';border-radius:10px;padding:7px 4px;width:50px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">'
+      +'<div style="font-size:9px;text-transform:uppercase;font-weight:600;color:'+(on?'#4A9EFF':'#666')+'">'+DAY_NAMES[d.getDay()]+'</div>'
+      +'<div style="font-size:15px;font-weight:700;color:'+(on?'#fff':'#aaa')+';margin:1px 0">'+d.getDate()+'</div>'
+      +'<div style="font-size:8px;color:'+(isToday?'#FFAA32':isSched?'#666':'transparent')+'">'+(isToday?'TODAY':isSched?'DUE':'.')+'</div>'
+      +'</button>';
+  }).join('');
+
+  const late=chosen!==scheduledKey;
   return '<div style="background:#222;border-radius:10px;padding:12px;margin-bottom:14px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
-    +'<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.06em">Completed on</div>'
-    +'<div style="font-size:11px;color:#555;margin-top:2px">Scheduled '+dateDisplay(scheduledKey,{weekday:'short',day:'numeric',month:'short'})+'</div></div>'
-    +'<input class="field-input" type="date" style="width:auto;padding:8px 10px;font-size:13px;flex-shrink:0" value="'+cd+'" onchange="setCompletionDate(this.value)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'
+    +'<div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.06em">Completed on</div>'
+    +'<div style="font-size:11px;color:#555">Due '+dateDisplay(scheduledKey,{weekday:'short',day:'numeric',month:'short'})+'</div>'
     +'</div>'
-    +(differs?'<div style="font-size:11px;color:#FFAA32;margin-top:8px">Will record in the calendar on '+dateDisplay(cd,{weekday:'long',day:'numeric',month:'short'})+'</div>':'')
+    +'<div id="date-strip" style="display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch">'+blocks+'</div>'
+    +(late?'<div style="font-size:11px;color:#FFAA32;margin-top:8px">Recording on '+dateDisplay(chosen,{weekday:'long',day:'numeric',month:'short'})+'</div>':'')
     +'</div>';
+}
+// Centre the strip on the selected date once it's in the DOM
+function centreDateStrip(){
+  const strip=document.getElementById('date-strip');
+  if(!strip)return;
+  const sel=strip.querySelector('button[style*="rgba(74,158,255"]');
+  if(sel&&sel.offsetLeft!==undefined)strip.scrollLeft=Math.max(0,sel.offsetLeft-strip.clientWidth/2+sel.offsetWidth/2);
 }
 
 function renderActiveProgram(){
@@ -1080,7 +1111,18 @@ function renderActiveProgram(){
   renderActiveProgramOverview(program,body);
 }
 
-// BUG FIX #2: use computeCurrentWeek instead of stored currentWeek
+// Colour + icon for each session type
+function sessionTypeIcon(t){
+  const s=(t||'gym').toLowerCase();
+  return s==='conditioning'?'\u{1F9AD} ':s==='hyrox'?'\u26a1 ':s==='run'?'\u{1F3C3} ':s==='swim'?'\u{1F3CA} ':s==='mobility'?'\u{1F9D8} ':'';
+}
+function sessionTypeColour(t){
+  const s=(t||'gym').toLowerCase();
+  return s==='swim'?'#64C8FF':s==='run'?'#FF8C00':s==='mobility'?'#FFC864':s==='hyrox'?'#FF5050':s==='conditioning'?'#B47CFF':'#4A9EFF';
+}
+// A session counts as scheduled if it has exercises, a mobility block, or is a freeform type
+function sessionIsScheduled(s){return (s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type);}
+
 function renderActiveProgramOverview(program,body){
   const today=todayStr(),startDate=program.startDate||today;
   const cs=getCSN();
@@ -1088,36 +1130,39 @@ function renderActiveProgramOverview(program,body){
   const viewWeekIndex=Math.max(0,Math.min(program.totalWeeks-1,currentWeekIndex+activeWeekOffset));
   const weekDays=Array.from({length:7},(_,i)=>addDays(startDate,viewWeekIndex*7+i));
   const isCurrentWeek=viewWeekIndex===currentWeekIndex;
-  const weekNavHtml='<div class="active-week-nav"><button class="active-week-nav-btn" '+(viewWeekIndex===0?'disabled':'')+' onclick="activeWeekOffset--;renderActiveProgram()">Prev</button><div class="active-week-label">Week '+(viewWeekIndex+1)+' of '+program.totalWeeks+(isCurrentWeek?' - This Week':'')+'</div><button class="active-week-nav-btn" '+(viewWeekIndex>=program.totalWeeks-1?'disabled':'')+' onclick="activeWeekOffset++;renderActiveProgram()">Next</button></div>';
-  let stripHtml=weekDays.map(dateKey=>{
+
+  const weekNavHtml='<div class="active-week-nav">'
+    +'<button class="active-week-nav-btn" '+(viewWeekIndex===0?'disabled':'')+' onclick="activeWeekOffset--;renderActiveProgram()">Prev</button>'
+    +'<div class="active-week-label">Week '+(viewWeekIndex+1)+' of '+program.totalWeeks+(isCurrentWeek?' - This Week':'')+'</div>'
+    +'<button class="active-week-nav-btn" '+(viewWeekIndex>=program.totalWeeks-1?'disabled':'')+' onclick="activeWeekOffset++;renderActiveProgram()">Next</button>'
+    +'</div>';
+
+  const stripHtml=weekDays.map(dateKey=>{
     const d=dayOfWeek(dateKey);
     const dayData=program.days&&program.days.find(dd=>dd.dateKey===dateKey);
-    const hasWorkout=dayData&&dayData.sessions&&dayData.sessions.some(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type));
-    const sessTotal=hasWorkout?dayData.sessions.filter(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type)).length:0;
-    const sessDone=hasWorkout?dayData.sessions.filter((s,si)=>cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si)).length:0;
-    const allDone=hasWorkout&&sessDone===sessTotal;
+    const sched=dayData&&dayData.sessions?dayData.sessions.filter(sessionIsScheduled):[];
+    const hasWorkout=sched.length>0;
+    const sessDone=hasWorkout?dayData.sessions.filter((s,si)=>sessionIsScheduled(s)&&cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si)).length:0;
+    const allDone=hasWorkout&&sessDone===sched.length;
     const isToday=dateKey===today;
     let cls='week-strip-day';
     if(allDone)cls+=' completed';else if(isToday&&hasWorkout)cls+=' today';
     if(!hasWorkout)cls+=' rest';
-    // Pick dot colour based on primary session type
-    let dotColor='#4A9EFF';
-    if(hasWorkout&&!allDone){
-      const primaryType=(dayData.sessions.find(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock)||{}).type||'gym';
-      const t=primaryType.toLowerCase();
-      if(t==='swim'||t==='swimming')dotColor='#64C8FF';
-      else if(t==='run'||t==='running')dotColor='#FF8C00';
-      else if(t==='mobility')dotColor='#FFC864';
-      else if(t==='hyrox')dotColor='#FF5050';
-    }
-    return '<div class="'+cls+'" onclick="'+(hasWorkout?'selectActiveDay(\''+dateKey+'\')':'')+'"><div class="wsd-name">'+DAY_NAMES[d]+'</div><div class="wsd-date">'+parseInt(dateKey.split('-')[2])+'</div>'+(allDone?'<div class="wsd-tick">&#10003;</div>':hasWorkout?'<div style="width:5px;height:5px;border-radius:50%;background:'+dotColor+';margin:2px auto 0"></div>':'')+'</div>';
+    const dots=sched.map(s=>'<div style="width:5px;height:5px;border-radius:50%;background:'+sessionTypeColour(s.type)+'"></div>').join('');
+    return '<div class="'+cls+'" onclick="'+(hasWorkout?'selectActiveDay(\''+dateKey+'\')':'')+'">'
+      +'<div class="wsd-name">'+DAY_NAMES[d]+'</div>'
+      +'<div class="wsd-date">'+parseInt(dateKey.split('-')[2])+'</div>'
+      +(allDone?'<div class="wsd-tick">&#10003;</div>':hasWorkout?'<div style="display:flex;gap:2px;justify-content:center;margin-top:3px">'+dots+'</div>':'')
+      +'</div>';
   }).join('');
+
+  // Next Up card - only on the current week
   let nextHtml='';
   if(isCurrentWeek){
     let nextDay=null,nextSi=null;
     for(const dateKey of weekDays){
       const dayData=program.days&&program.days.find(dd=>dd.dateKey===dateKey);if(!dayData)continue;
-      const idx=dayData.sessions.findIndex((s,si)=>((s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type))&&!cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si));
+      const idx=dayData.sessions.findIndex((s,si)=>sessionIsScheduled(s)&&!cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si));
       if(idx>-1){nextDay=dateKey;nextSi=idx;break;}
     }
     if(nextDay!==null){
@@ -1126,47 +1171,98 @@ function renderActiveProgramOverview(program,body){
       const isToday=nextDay===today;
       const exCount=(session.exercises&&session.exercises.length)||0;
       const hasMob=!!session.mobilityBlock;
-      const exPreview=(session.exercises||[]).slice(0,3).map(ex=>{const e=getExercises().find(e=>e.id===ex.exId);return e?e.name:'';}).filter(Boolean).join(', ');
-      nextHtml='<div class="section-title">Next Up</div><div class="workout-card"><div class="workout-card-title">'+dayData.name+(session.label?' - '+session.label:'')+'</div><div class="workout-card-meta">'+(isToday?'Today':dateDisplay(nextDay,{weekday:'long',day:'numeric',month:'long'}))+' &middot; '+(hasMob?'Mobility + ':'')+exCount+' exercises</div><div style="font-size:12px;color:#666;margin-bottom:12px">'+exPreview+(exCount>3?'...':'')+'</div><button class="btn" onclick="startSession(\''+nextDay+'\','+nextSi+')">Start '+(session.label||'Workout')+'</button></div>';
+      const ff=isFreeform(session.type);
+      const detail=ff
+        ?(session.notes||'You will type what you did')
+        :((session.exercises||[]).slice(0,3).map(ex=>{const e=getExercises().find(e=>e.id===ex.exId);return e?e.name:'';}).filter(Boolean).join(', ')+(exCount>3?'...':''));
+      nextHtml='<div class="section-title">Next Up</div><div class="workout-card">'
+        +'<div class="workout-card-title">'+sessionTypeIcon(session.type)+dayData.name+(session.label?' - '+session.label:'')+'</div>'
+        +'<div class="workout-card-meta">'+(isToday?'Today':dateDisplay(nextDay,{weekday:'long',day:'numeric',month:'long'}))+' &middot; '+(ff?'Log freeform':(hasMob?'Mobility + ':'')+exCount+' exercises')+'</div>'
+        +'<div style="font-size:12px;color:#888;margin-bottom:12px;line-height:1.5">'+detail+'</div>'
+        +'<button class="btn" onclick="startSession(\''+nextDay+'\','+nextSi+')">Start '+(session.label||'Workout')+'</button>'
+        +'</div>';
     } else {
       nextHtml='<div class="card"><h2>Week complete!</h2><p>All sessions done. Come back next week.</p></div>';
     }
   }
+
+  // All sessions for the viewed week
   let allSessionsHtml='';
   weekDays.forEach(dateKey=>{
     const dayData=program.days&&program.days.find(dd=>dd.dateKey===dateKey);
-    if(!dayData||!dayData.sessions||!dayData.sessions.some(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type)))return;
+    if(!dayData||!dayData.sessions||!dayData.sessions.some(sessionIsScheduled))return;
     const d=dayOfWeek(dateKey),isToday=dateKey===today;
     allSessionsHtml+='<div style="font-size:12px;font-weight:600;color:#888;margin:12px 0 6px">'+DAY_NAMES[d]+' '+parseInt(dateKey.split('-')[2])+' &middot; Week '+(viewWeekIndex+1)+(isToday?' - Today':'')+'</div>';
     dayData.sessions.forEach((session,si)=>{
-      if(!(session.exercises&&session.exercises.length)&&!session.mobilityBlock&&!isFreeform(session.type))return;
+      if(!sessionIsScheduled(session))return;
       const done=cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si);
       const exCount=(session.exercises&&session.exercises.length)||0;
       const hasMob=!!session.mobilityBlock;
       const sessionId='sess-'+dateKey+'-'+si;
-      let previewRows='';
-      if(hasMob){
-        const mb=session.mobilityBlock;
-        const mobNames=mb.exercises.map(id=>{const e=getExercises().find(e=>e.id===id);return e?e.name:'';}).filter(Boolean);
-        previewRows+='<div class="session-preview-row" style="color:#FFC864"><span>Mobility: '+mb.name+'</span><span>'+(mb.rounds>1?mb.rounds+'x':'')+'</span></div>';
-        mobNames.forEach(n=>previewRows+='<div class="session-preview-row" style="padding-left:12px"><span>'+n+'</span></div>');
-      }
-      const presc=getEffectivePrescription;
-      (session.exercises||[]).forEach(ex=>{
-        const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
-        const p=getEffectivePrescription(ex,viewWeekIndex+1);
-        previewRows+='<div class="session-preview-row"><span>'+exData.name+'</span><span style="color:#4A9EFF">'+(p.sets&&p.reps?p.sets+'x'+p.reps:ex.notes||'')+'</span></div>';
-      });
       const sType=(session.type||'gym').toLowerCase();
-      const typeIcon=sType==='conditioning'?'\u{1F9AD} ':sType==='hyrox'?'\u26a1 ':sType==='run'?'\u{1F3C3} ':sType==='swim'?'\u{1F3CA} ':sType==='mobility'?'\u{1F9D8} ':'';
+      const ff=isFreeform(sType);
+
+      let previewRows='';
+      if(ff){
+        previewRows=session.notes
+          ?'<div style="font-size:13px;color:#ccc;line-height:1.6;padding:2px 0">'+session.notes+'</div>'
+          :'<div style="font-size:12px;color:#555">Nothing scheduled - you will type what you did</div>';
+      } else {
+        if(hasMob){
+          const mb=session.mobilityBlock;
+          const mobNames=mb.exercises.map(id=>{const e=getExercises().find(e=>e.id===id);return e?e.name:'';}).filter(Boolean);
+          previewRows+='<div class="session-preview-row" style="color:#FFC864"><span>Mobility: '+mb.name+'</span><span>'+(mb.rounds>1?mb.rounds+'x':'')+'</span></div>';
+          mobNames.forEach(n=>previewRows+='<div class="session-preview-row" style="padding-left:12px"><span>'+n+'</span></div>');
+        }
+        (session.exercises||[]).forEach(ex=>{
+          const exData=getExercises().find(e=>e.id===ex.exId);if(!exData)return;
+          const p=getEffectivePrescription(ex,viewWeekIndex+1);
+          const presc=(p.sets&&p.reps)?p.sets+'x'+p.reps:(ex.notes||'');
+          const rpe=p.rpeTarget?' @'+p.rpeTarget:'';
+          previewRows+='<div class="session-preview-row"><span>'+(ex.supersetGroup?'<span class="se-superset-badge">'+ex.supersetGroup+'</span>':'')+exData.name+'</span><span style="color:#4A9EFF">'+presc+rpe+'</span></div>';
+        });
+      }
+
+      const metaText=ff
+        ?(session.notes?'Tap to see the plan':(sType==='conditioning'?'Conditioning - log freeform':sType==='run'?'Run - log freeform':sType==='swim'?'Swim - log sets + distance':'Hyrox - log freeform'))
+        :((hasMob?'Mobility + ':'')+exCount+' exercises - tap to preview');
+
       const swappable=(sType==='run'||sType==='conditioning')&&!done;
       const swapTo=sType==='run'?'conditioning':'run';
       const swapLabel=sType==='run'?'Swap to Conditioning':'Swap to Run';
-      const metaText=isFreeform(sType)?(sType==='conditioning'?'Conditioning - log freeform':sType==='run'?'Run - log freeform':sType==='swim'?'Swim - log sets + distance':'Hyrox - log freeform'):((hasMob?'Mobility + ':'')+exCount+' exercises - tap to preview');
-      allSessionsHtml+='<div class="session-start-card" onclick="toggleSessionPreview(\''+sessionId+'\')"><div class="session-start-card-top"><div><div class="session-start-label">'+typeIcon+(session.label||'Session '+(si+1))+'</div><div class="session-start-meta">'+metaText+'</div></div>'+(done?'<button class="session-start-btn done" onclick="event.stopPropagation();viewCompletedSession(\''+dateKey+'\','+si+',\''+program.id+'\')" style="background:rgba(80,200,120,0.15);color:#50C878">&#10003; View</button>':'<button class="session-start-btn" onclick="event.stopPropagation();startSession(\''+dateKey+'\','+si+')">Start</button>')+'</div>'+(swappable?'<div style="margin-top:8px"><button onclick="event.stopPropagation();swapSessionType(\''+program.id+'\',\''+dateKey+'\','+si+',\''+swapTo+'\')" style="background:none;border:1px solid #3a3a3a;color:#FFAA32;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">&#8644; '+swapLabel+'</button></div>':'')+'<div class="session-exercise-preview" id="'+sessionId+'">'+(previewRows||'<div style="font-size:12px;color:#555">Nothing scheduled - you will type what you did</div>')+'</div></div>';
+
+      allSessionsHtml+='<div class="session-start-card" onclick="toggleSessionPreview(\''+sessionId+'\')">'
+        +'<div class="session-start-card-top">'
+        +'<div><div class="session-start-label">'+sessionTypeIcon(sType)+(session.label||'Session '+(si+1))+'</div>'
+        +'<div class="session-start-meta">'+metaText+'</div></div>'
+        +(done
+          ?'<button class="session-start-btn done" onclick="event.stopPropagation();viewCompletedSession(\''+dateKey+'\','+si+',\''+program.id+'\')" style="background:rgba(80,200,120,0.15);color:#50C878">&#10003; View</button>'
+          :'<button class="session-start-btn" onclick="event.stopPropagation();startSession(\''+dateKey+'\','+si+')">Start</button>')
+        +'</div>'
+        +(swappable?'<div style="margin-top:8px"><button onclick="event.stopPropagation();swapSessionType(\''+program.id+'\',\''+dateKey+'\','+si+',\''+swapTo+'\')" style="background:none;border:1px solid #3a3a3a;color:#FFAA32;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif">&#8644; '+swapLabel+'</button></div>':'')
+        +'<div class="session-exercise-preview" id="'+sessionId+'">'+previewRows+'</div>'
+        +'</div>';
     });
   });
-  body.innerHTML='<div class="section-title" style="margin-top:4px">'+program.name+'</div><div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:'+Math.round(((program.completedWorkouts||0)/program.totalWorkouts)*100)+'%"></div></div>'+weekNavHtml+'<div class="week-strip">'+stripHtml+'</div>'+nextHtml+'<div class="section-title">Sessions This Week</div>'+(allSessionsHtml||'<div style="font-size:13px;color:#555;padding:8px 0">No sessions scheduled this week</div>')+buildWeeklyTable(program);
+
+  body.innerHTML='<div class="section-title" style="margin-top:4px">'+program.name+'</div>'
+    +'<div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:'+Math.round(((program.completedWorkouts||0)/program.totalWorkouts)*100)+'%"></div></div>'
+    +weekNavHtml
+    +'<div class="week-strip">'+stripHtml+'</div>'
+    +nextHtml
+    +'<div class="section-title">Sessions This Week</div>'
+    +(allSessionsHtml||'<div style="font-size:13px;color:#555;padding:8px 0">No sessions scheduled this week</div>')
+    +buildWeeklyTable(program);
+}
+
+function toggleSessionPreview(id){const el=document.getElementById(id);if(el)el.classList.toggle('open');}
+
+function selectActiveDay(dateKey){
+  const program=getPrograms().find(p=>p.status==='active');if(!program)return;
+  const dayData=program.days&&program.days.find(d=>d.dateKey===dateKey);if(!dayData)return;
+  const cs=getCSN();
+  const firstPending=dayData.sessions.findIndex((s,si)=>sessionIsScheduled(s)&&!cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si));
+  if(firstPending>-1)startSession(dateKey,firstPending);
 }
 
 // Swap a scheduled session between run and conditioning (only those two)
@@ -1183,7 +1279,7 @@ async function swapSessionType(programId,dateKey,sessionIdx,newType){
   renderActiveProgram();
 }
 
-// Weekly breakdown table: volume, sessions, RPE target vs actual
+// Weekly breakdown table: sessions, volume, swim, run, RPE target vs actual
 function buildWeeklyTable(program){
   if(!program||!program.startDate)return '';
   const cs=getCSN();
@@ -1195,11 +1291,10 @@ function buildWeeklyTable(program){
 
   for(let w=0;w<program.totalWeeks;w++){
     const weekDates=Array.from({length:7},(_,i)=>addDays(program.startDate,w*7+i));
-    // scheduled sessions this week
     let scheduled=0;
     weekDates.forEach(dk=>{
       const day=program.days&&program.days.find(d=>d.dateKey===dk);
-      if(day)scheduled+=day.sessions.filter(s=>(s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type)).length;
+      if(day)scheduled+=day.sessions.filter(sessionIsScheduled).length;
     });
     if(scheduled===0)continue;
     const doneCount=cs.filter(c=>c.programId===program.id&&weekDates.includes(c.dateKey)).length;
@@ -1209,7 +1304,7 @@ function buildWeeklyTable(program){
     const weekCw=cw.filter(x=>weekDates.includes(x.date));
     const tgts=weekCw.map(x=>x.rpeTarget).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
     const acts=weekCw.map(x=>x.rpeActual).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
-    // Freeform sessions (hyrox/run/swim/conditioning) log one RPE for the whole session
+    // Freeform sessions log one RPE for the whole session
     workouts.forEach(x=>{
       if(!weekDates.includes(x.date))return;
       const ex=x.exercises;
@@ -1259,15 +1354,6 @@ function buildWeeklyTable(program){
     +'</div>';
 }
 
-function toggleSessionPreview(id){const el=document.getElementById(id);if(el)el.classList.toggle('open');}
-
-function selectActiveDay(dateKey){
-  const program=getPrograms().find(p=>p.status==='active');if(!program)return;
-  const dayData=program.days&&program.days.find(d=>d.dateKey===dateKey);if(!dayData)return;
-  const cs=getCSN();
-  const firstPending=dayData.sessions.findIndex((s,si)=>((s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type))&&!cs.some(c=>c.programId===program.id&&c.dateKey===dateKey&&c.sessionIdx===si));
-  if(firstPending>-1)startSession(dateKey,firstPending);
-}
 
 let logData={};
 // Read-only view of a completed freeform (hyrox / conditioning / run) session
@@ -1605,6 +1691,7 @@ function renderFreeformLogger(program,state,session,dayData){
 
   html+='<button class="add-session-btn" onclick="ffAddBlock()">+ New Block</button>';
 
+  setTimeout(centreDateStrip,30);
   const savedFf=localStorage.getItem(ffSaveKey(state.dateKey,state.sessionIdx));
   if(savedFf)html+='<div style="font-size:11px;color:#50C878;text-align:center;margin-top:16px">&#10003; Progress auto-saved</div>';
 
@@ -1711,6 +1798,7 @@ function renderWorkoutLogger(program,state){
     if(group.type==='superset'){html+='<div class="log-superset-group"><div class="log-superset-label">Superset '+group.label+'</div>';group.exercises.forEach(({ex,exIdx})=>{html+=renderLogExCard(ex,state.sessionIdx,exIdx,prevWorkouts,weekNum);});html+='</div>';}
     else{html+=renderLogExCard(group.ex,state.sessionIdx,group.exIdx,prevWorkouts,weekNum);}
   });
+  setTimeout(centreDateStrip,30);
   const hasSaved=!!localStorage.getItem('tt_log_'+state.dateKey+'_'+state.sessionIdx);
   html+=(hasSaved?'<div style="font-size:11px;color:#50C878;text-align:center;margin-bottom:8px;margin-top:16px">&#10003; Progress auto-saved</div>':'');
   html+='<button class="btn" style="margin-top:8px" onclick="finishSession(\''+program.id+'\',\''+state.dateKey+'\','+state.sessionIdx+')">Finish '+sessionLabel+'</button>';
