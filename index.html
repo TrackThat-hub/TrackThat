@@ -513,14 +513,17 @@ async function loadAllData(){
 
 function getWorkouts(){return DB.workouts;}
 // Total swim metres across the given date keys (reads the freeform distance field)
-function swimDistanceFor(dateKeys){
+function distanceForType(dateKeys,type){
   return DB.workouts.reduce((sum,w)=>{
     if(dateKeys&&!dateKeys.includes(w.date))return sum;
+    if(type&&(w.type||'').toLowerCase()!==type)return sum;
     const ex=w.exercises;
     if(ex&&typeof ex==='object'&&!Array.isArray(ex)&&ex.distance)return sum+Number(ex.distance);
     return sum;
   },0);
 }
+function swimDistanceFor(dateKeys){return distanceForType(dateKeys,'swim');}
+function runDistanceFor(dateKeys){return distanceForType(dateKeys,'run');}
 function getSurfs(){return DB.surfs;}
 function getPrograms(){return DB.programs;}
 function getPRs(){return DB.prs;}
@@ -579,8 +582,10 @@ const SESSION_TYPES=[{value:'gym',label:'Gym'},{value:'swim',label:'Swimming'},{
 // Session types that use the freeform line-by-line logger instead of structured sets/reps
 const FREEFORM_TYPES=['hyrox','conditioning','run','swim'];
 // Types that also capture a total distance (metres)
-const DISTANCE_TYPES=['swim'];
+const DISTANCE_TYPES=['swim','run'];
 function hasDistance(t){return DISTANCE_TYPES.includes((t||'').toLowerCase());}
+// Swim is logged in metres, run in km (stored as metres either way)
+function distanceUnit(t){return (t||'').toLowerCase()==='run'?'km':'m';}
 function isFreeform(t){return FREEFORM_TYPES.includes((t||'').toLowerCase());}
 
 // Weekly targets — stored in app_settings, defaults applied if not set
@@ -630,9 +635,15 @@ function computeCurrentWeek(program){
 
 // BUG FIX #3: get effective prescription for a given week (applies phase overrides)
 function getEffectivePrescription(ex,weekNum){
-  if(!ex.phases||!ex.phases.length)return{sets:ex.sets,reps:ex.reps};
+  if(!ex.phases||!ex.phases.length)return{sets:ex.sets,reps:ex.reps,rpeTarget:ex.rpeTarget||null,notes:ex.notes||''};
   const match=ex.phases.find(ph=>weekNum>=ph.weekFrom&&weekNum<=ph.weekTo);
-  return match?{sets:match.sets,reps:match.reps}:{sets:ex.sets,reps:ex.reps};
+  if(!match)return{sets:ex.sets,reps:ex.reps,rpeTarget:ex.rpeTarget||null,notes:ex.notes||''};
+  return{
+    sets:match.sets,
+    reps:match.reps,
+    rpeTarget:(match.rpeTarget!==undefined&&match.rpeTarget!==null)?match.rpeTarget:(ex.rpeTarget||null),
+    notes:match.notes||ex.notes||''
+  };
 }
 
 async function seedExercises(){
@@ -1194,9 +1205,16 @@ function buildWeeklyTable(program){
     const doneCount=cs.filter(c=>c.programId===program.id&&weekDates.includes(c.dateKey)).length;
     const volume=workouts.filter(x=>weekDates.includes(x.date)).reduce((s,x)=>s+(x.total_kg||x.totalKg||0),0);
     const swimM=swimDistanceFor(weekDates);
+    const runM=runDistanceFor(weekDates);
     const weekCw=cw.filter(x=>weekDates.includes(x.date));
     const tgts=weekCw.map(x=>x.rpeTarget).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
     const acts=weekCw.map(x=>x.rpeActual).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
+    // Freeform sessions (hyrox/run/swim/conditioning) log one RPE for the whole session
+    workouts.forEach(x=>{
+      if(!weekDates.includes(x.date))return;
+      const ex=x.exercises;
+      if(ex&&typeof ex==='object'&&!Array.isArray(ex)&&ex.rpe)acts.push(Number(ex.rpe));
+    });
     const avg=a=>a.length?(a.reduce((s,v)=>s+Number(v),0)/a.length):null;
     const tAvg=avg(tgts),aAvg=avg(acts);
     const isCur=(w+1)===currentWeek;
@@ -1215,6 +1233,7 @@ function buildWeeklyTable(program){
       +'<td style="padding:9px 8px;font-size:12px;color:'+(doneCount>=scheduled?'#50C878':'#ccc')+';border-bottom:1px solid #2a2a2a;text-align:center">'+doneCount+'/'+scheduled+'</td>'
       +'<td style="padding:9px 8px;font-size:12px;color:#ccc;border-bottom:1px solid #2a2a2a;text-align:right;white-space:nowrap">'+(volume>0?volume.toLocaleString():'\u2014')+'</td>'
       +'<td style="padding:9px 8px;font-size:12px;color:#64C8FF;border-bottom:1px solid #2a2a2a;text-align:right;white-space:nowrap">'+(swimM>0?swimM.toLocaleString():'\u2014')+'</td>'
+      +'<td style="padding:9px 8px;font-size:12px;color:#FF8C00;border-bottom:1px solid #2a2a2a;text-align:right;white-space:nowrap">'+(runM>0?(runM/1000).toFixed(1).replace(/\.0$/,''):'\u2014')+'</td>'
       +'<td style="padding:9px 8px;font-size:12px;color:#4A9EFF;border-bottom:1px solid #2a2a2a;text-align:center">'+(tAvg!==null?tAvg.toFixed(1):'\u2014')+'</td>'
       +'<td style="padding:9px 8px;font-size:12px;color:#fff;border-bottom:1px solid #2a2a2a;text-align:center">'+(aAvg!==null?aAvg.toFixed(1):'\u2014')+'</td>'
       +'<td style="padding:9px 8px;font-size:12px;border-bottom:1px solid #2a2a2a;text-align:center">'+delta+'</td>'
@@ -1225,17 +1244,18 @@ function buildWeeklyTable(program){
 
   return '<div class="section-title">Week by Week</div>'
     +'<div style="background:#222;border-radius:12px;padding:4px 8px 8px;margin-bottom:12px;overflow-x:auto">'
-    +'<table style="width:100%;border-collapse:collapse;min-width:400px">'
+    +'<table style="width:100%;border-collapse:collapse;min-width:460px">'
     +'<thead><tr>'
     +'<th style="padding:10px 8px;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.06em;text-align:left;font-weight:600">Wk</th>'
     +'<th style="padding:10px 8px;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.06em;text-align:center;font-weight:600">Done</th>'
     +'<th style="padding:10px 8px;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.06em;text-align:right;font-weight:600">Volume</th>'
     +'<th style="padding:10px 8px;font-size:10px;color:#64C8FF;text-transform:uppercase;letter-spacing:0.06em;text-align:right;font-weight:600">Swim</th>'
+    +'<th style="padding:10px 8px;font-size:10px;color:#FF8C00;text-transform:uppercase;letter-spacing:0.06em;text-align:right;font-weight:600">Run</th>'
     +'<th style="padding:10px 8px;font-size:10px;color:#4A9EFF;text-transform:uppercase;letter-spacing:0.06em;text-align:center;font-weight:600">RPE T</th>'
     +'<th style="padding:10px 8px;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.06em;text-align:center;font-weight:600">RPE A</th>'
     +'<th style="padding:10px 8px;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:0.06em;text-align:center;font-weight:600">+/-</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>'
-    +'<div style="font-size:10px;color:#555;padding:8px 8px 2px">Volume in kg, swim in metres. RPE T = target, RPE A = actual. Orange means you went harder than planned.</div>'
+    +'<div style="font-size:10px;color:#555;padding:8px 8px 2px">Volume kg &middot; swim m &middot; run km. RPE T = target, A = actual. Orange = harder than planned.</div>'
     +'</div>';
 }
 
@@ -1265,6 +1285,9 @@ function viewCompletedFreeform(dateKey,sessionIdx,program,session,dayData){
   const lineCount=blocks.reduce((s,b)=>s+(b.lines||[]).length,0);
   const recFormat=rec&&rec.exercises.format?rec.exercises.format:null;
   const recDistance=rec&&rec.exercises.distance?rec.exercises.distance:null;
+  const recUnit=rec&&rec.exercises.unit?rec.exercises.unit:'m';
+  const recRpe=rec&&rec.exercises.rpe?rec.exercises.rpe:null;
+  const distLabel=recDistance?(recUnit==='km'?(recDistance/1000).toFixed(2).replace(/\.?0+$/,'')+'km':recDistance.toLocaleString()+'m'):null;
 
   let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
     +'<button class="btn-outline" style="padding:8px 14px;font-size:13px;flex:none" onclick="activeWeekOffset=0;renderActiveProgram()">Back</button>'
@@ -1276,17 +1299,18 @@ function viewCompletedFreeform(dateKey,sessionIdx,program,session,dayData){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">'
     +'<span style="font-size:11px;background:rgba(80,200,120,0.1);color:#50C878;border-radius:8px;padding:6px 12px">&#10003; Completed'+(rec?' '+dateDisplay(rec.date,{day:'numeric',month:'short',year:'numeric'}):'')+'</span>'
     +(recFormat?'<span style="font-size:11px;background:rgba(74,158,255,0.12);color:#4A9EFF;border-radius:8px;padding:6px 12px;font-weight:600">'+recFormat.charAt(0).toUpperCase()+recFormat.slice(1)+'</span>':'')
-    +(recDistance?'<span style="font-size:11px;background:rgba(100,200,255,0.12);color:#64C8FF;border-radius:8px;padding:6px 12px;font-weight:600">'+recDistance.toLocaleString()+'m</span>':'')
+    +(distLabel?'<span style="font-size:11px;background:rgba(100,200,255,0.12);color:#64C8FF;border-radius:8px;padding:6px 12px;font-weight:600">'+distLabel+'</span>':'')
+    +(recRpe?'<span style="font-size:11px;background:rgba(255,170,50,0.12);color:#FFAA32;border-radius:8px;padding:6px 12px;font-weight:600">RPE '+recRpe+'</span>':'')
     +'</div>';
 
   if(!blocks.length&&recDistance){
-    html+='<div class="stat-grid"><div class="stat-card" style="grid-column:span 2"><div class="stat-label">Distance</div><div class="stat-value">'+recDistance.toLocaleString()+'<span class="stat-inline-unit">m</span></div><div class="stat-unit">'+(recDistance/1000).toFixed(2).replace(/\.00$/,'')+' km</div></div></div>';
+    html+='<div class="stat-grid"><div class="stat-card" style="grid-column:span 2"><div class="stat-label">Distance</div><div class="stat-value">'+distLabel+'</div>'+(recRpe?'<div class="stat-unit">Session RPE '+recRpe+'</div>':'')+'</div></div>';
   } else if(!blocks.length){
     html+='<div class="card"><p>No detail was recorded for this session.</p></div>';
   } else {
     html+='<div class="stat-grid" style="margin-bottom:12px">'
-      +'<div class="stat-card"><div class="stat-label">'+(recDistance?'Distance':'Movements')+'</div><div class="stat-value">'+(recDistance?recDistance.toLocaleString()+'<span class="stat-inline-unit">m</span>':lineCount)+'</div></div>'
-      +'<div class="stat-card"><div class="stat-label">'+(recDistance?'Sets':'Blocks')+'</div><div class="stat-value" style="color:#4A9EFF">'+(recDistance?lineCount:blocks.length)+'</div></div>'
+      +'<div class="stat-card"><div class="stat-label">'+(recDistance?'Distance':'Movements')+'</div><div class="stat-value">'+(recDistance?distLabel:lineCount)+'</div></div>'
+      +'<div class="stat-card"><div class="stat-label">'+(recRpe?'Session RPE':recDistance?'Sets':'Blocks')+'</div><div class="stat-value" style="color:#4A9EFF">'+(recRpe?recRpe:recDistance?lineCount:blocks.length)+'</div></div>'
       +'</div>';
     blocks.forEach(b=>{
       html+='<div style="background:#222;border-radius:12px;padding:14px;margin-bottom:8px'+(b.label?';border-left:3px solid #4A9EFF':'')+'">';
@@ -1403,12 +1427,12 @@ function startSession(dateKey,sessionIdx){
   else{logData={};tickState={};mobBlocksDone={};}
   // Restore any freeform (hyrox/conditioning/run) lines for this session
   const ffSaved=localStorage.getItem('tt_ff_'+dateKey+'_'+sessionIdx);
-  freeformData=[];freeformFormat=null;freeformDistance='';
+  freeformData=[];freeformFormat=null;freeformDistance='';freeformRpe='';
   if(ffSaved){
     try{
       const parsed=JSON.parse(ffSaved);
       if(Array.isArray(parsed)){freeformData=parsed;}           // legacy shape
-      else if(parsed&&typeof parsed==='object'){freeformData=parsed.blocks||[];freeformFormat=parsed.format||null;freeformDistance=parsed.distance||'';if(parsed.completionDate)completionDate=parsed.completionDate;}
+      else if(parsed&&typeof parsed==='object'){freeformData=parsed.blocks||[];freeformFormat=parsed.format||null;freeformDistance=parsed.distance||'';freeformRpe=parsed.rpe||'';if(parsed.completionDate)completionDate=parsed.completionDate;}
     }catch(e){freeformData=[];freeformFormat=null;}
   }
   activeLogState={dateKey,sessionIdx};renderActiveProgram();
@@ -1421,12 +1445,15 @@ function clearSavedLog(dk,si){localStorage.removeItem('tt_log_'+dk+'_'+si);}
 let freeformData=[];
 let freeformFormat=null; // 'singles' | 'doubles' | null (hyrox only)
 let freeformDistance=''; // total metres (swim only)
-function ffSetDistance(v){freeformDistance=String(v||'').replace(/[^0-9]/g,'');autoSaveFreeform();}
+function ffSetDistance(v){freeformDistance=String(v||'').replace(/[^0-9.]/g,'');autoSaveFreeform();}
+// Session RPE for freeform workouts (1-10)
+let freeformRpe='';
+function ffSetRpe(v){freeformRpe=String(v||'');autoSaveFreeform();}
 
 function ffSaveKey(dk,si){return 'tt_ff_'+dk+'_'+si;}
 function autoSaveFreeform(){
   if(!activeLogState)return;
-  localStorage.setItem(ffSaveKey(activeLogState.dateKey,activeLogState.sessionIdx),JSON.stringify({blocks:freeformData,format:freeformFormat,distance:freeformDistance,completionDate}));
+  localStorage.setItem(ffSaveKey(activeLogState.dateKey,activeLogState.sessionIdx),JSON.stringify({blocks:freeformData,format:freeformFormat,distance:freeformDistance,rpe:freeformRpe,completionDate}));
 }
 function ffSetFormat(f){
   freeformFormat=(freeformFormat===f)?null:f;
@@ -1526,18 +1553,30 @@ function renderFreeformLogger(program,state,session,dayData){
       +'</div>';
   }
 
-  // Swim: total distance for the session
+  // Distance (swim in metres, run in km) and session RPE
+  const dUnit=distanceUnit(type);
   if(hasDistance(type)){
-    const km=freeformDistance?(Number(freeformDistance)/1000).toFixed(2).replace(/\.00$/,''):null;
+    const n=Number(freeformDistance);
+    const sub=freeformDistance&&!isNaN(n)
+      ?(dUnit==='km'?(n*1000).toLocaleString()+' m':(n/1000).toFixed(2).replace(/\.?0+$/,'')+' km')
+      :null;
     html+='<div style="background:#222;border-radius:10px;padding:12px;margin-bottom:14px">'
-      +'<div class="field-label" style="margin-top:0">Total distance</div>'
+      +'<div class="field-label" style="margin-top:0">Distance</div>'
       +'<div style="display:flex;align-items:center;gap:10px">'
-      +'<input class="field-input" type="number" min="0" step="25" inputmode="numeric" style="flex:1" placeholder="e.g. 1000" value="'+freeformDistance+'" oninput="ffSetDistance(this.value)">'
-      +'<span style="font-size:14px;color:#888;flex-shrink:0">metres</span>'
+      +'<input class="field-input" type="number" min="0" step="'+(dUnit==='km'?'0.1':'25')+'" inputmode="decimal" style="flex:1" placeholder="'+(dUnit==='km'?'e.g. 11':'e.g. 1600')+'" value="'+freeformDistance+'" oninput="ffSetDistance(this.value)">'
+      +'<span style="font-size:14px;color:#888;flex-shrink:0">'+(dUnit==='km'?'km':'metres')+'</span>'
       +'</div>'
-      +(km?'<div style="font-size:11px;color:#4A9EFF;margin-top:6px">'+km+' km</div>':'<div style="font-size:11px;color:#555;margin-top:6px">Counts toward your swim totals</div>')
+      +(sub?'<div style="font-size:11px;color:#4A9EFF;margin-top:6px">'+sub+'</div>':'<div style="font-size:11px;color:#555;margin-top:6px">Feeds your distance totals</div>')
       +'</div>';
   }
+
+  // Session RPE - how hard the whole thing felt
+  html+='<div style="background:#222;border-radius:10px;padding:12px;margin-bottom:14px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">'
+    +'<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.06em">Session RPE</div>'
+    +'<div style="font-size:11px;color:#555;margin-top:2px">How hard it felt, 1-10</div></div>'
+    +'<input class="field-input" type="number" min="1" max="10" step="0.5" inputmode="decimal" style="width:80px;text-align:center;flex-shrink:0" placeholder="-" value="'+freeformRpe+'" oninput="ffSetRpe(this.value)">'
+    +'</div></div>';
 
   html+='<div style="font-size:12px;color:#666;margin-bottom:12px">Type what you did, line by line. Press Enter for a new line.</div>';
 
@@ -1585,8 +1624,10 @@ async function finishFreeformSession(programId,dateKey,sessionIdx){
     .filter(b=>b.lines.length>0);
   const lineCount=blocks.reduce((s,b)=>s+b.lines.length,0);
 
-  const distVal=hasDistance(session.type)&&freeformDistance?parseInt(freeformDistance):null;
-  if(lineCount===0&&!distVal){
+  const rawDist=hasDistance(session.type)&&freeformDistance?Number(freeformDistance):null;
+  const distVal=(rawDist&&!isNaN(rawDist))?Math.round(distanceUnit(session.type)==='km'?rawDist*1000:rawDist):null;
+  const sessRpe=freeformRpe!==''&&!isNaN(Number(freeformRpe))?Number(freeformRpe):null;
+  if(lineCount===0&&!distVal&&!sessRpe){
     if(!confirm('You have not recorded anything. Finish anyway?'))return;
   }
 
@@ -1605,15 +1646,18 @@ async function finishFreeformSession(programId,dateKey,sessionIdx){
     type:type,
     name:(dayData.name||'Workout')+(session.label?' - '+session.label:'')+(fmt?' ('+fmt+')':''),
     totalKg:0,
-    exercises:{freeform:true,blocks,dateKey,sessionIdx,format:fmt,distance:distVal}
+    exercises:{freeform:true,blocks,dateKey,sessionIdx,format:fmt,distance:distVal,rpe:sessRpe,unit:distanceUnit(session.type)}
   });
 
   clearSavedFreeform(dateKey,sessionIdx);
   freeformData=[];
   const finishedFormat=fmt;
   const finishedDistance=distVal;
+  const finishedUnit=distanceUnit(session.type);
+  const finishedRpe=sessRpe;
   freeformFormat=null;
   freeformDistance='';
+  freeformRpe='';
   completionDate=null;
   activeLogState=null;
 
@@ -1632,7 +1676,7 @@ async function finishFreeformSession(programId,dateKey,sessionIdx){
     +'<div style="font-size:24px;font-weight:700;color:#fff;margin-bottom:4px">Session Complete!</div>'
     +'<div style="font-size:14px;color:#888">'+(session.label||dayData.name||'Great work')+' &middot; '+typeLabel+(finishedFormat?' &middot; '+finishedFormat.charAt(0).toUpperCase()+finishedFormat.slice(1):'')+'</div>'
     +'</div>'
-    +'<div class="stat-grid" style="margin-bottom:16px"><div class="stat-card"><div class="stat-label">'+(finishedDistance?'Distance':'Movements Logged')+'</div><div class="stat-value">'+(finishedDistance?finishedDistance.toLocaleString()+'<span class="stat-inline-unit">m</span>':lineCount)+'</div></div><div class="stat-card"><div class="stat-label">'+(finishedFormat?'Format':finishedDistance?'Sets Logged':'Blocks')+'</div><div class="stat-value" style="color:#4A9EFF'+(finishedFormat?';font-size:20px':'')+'">'+(finishedFormat?finishedFormat.charAt(0).toUpperCase()+finishedFormat.slice(1):finishedDistance?lineCount:blocks.length)+'</div></div></div>'
+    +'<div class="stat-grid" style="margin-bottom:16px"><div class="stat-card"><div class="stat-label">'+(finishedDistance?'Distance':'Movements Logged')+'</div><div class="stat-value">'+(finishedDistance?(finishedUnit==='km'?(finishedDistance/1000).toFixed(2).replace(/\.?0+$/,'')+'<span class="stat-inline-unit">km</span>':finishedDistance.toLocaleString()+'<span class="stat-inline-unit">m</span>'):lineCount)+'</div></div><div class="stat-card"><div class="stat-label">'+(finishedRpe?'Session RPE':finishedFormat?'Format':'Blocks')+'</div><div class="stat-value" style="color:#4A9EFF'+(finishedFormat&&!finishedRpe?';font-size:20px':'')+'">'+(finishedRpe?finishedRpe:finishedFormat?finishedFormat.charAt(0).toUpperCase()+finishedFormat.slice(1):blocks.length)+'</div></div></div>'
     +recap
     +'<button class="btn" style="margin-top:16px" onclick="activeWeekOffset=0;renderActiveProgram()">Back to Program</button>';
 
@@ -1793,7 +1837,7 @@ function renderLogExCard(ex,sessionIdx,exIdx,prevWorkouts,weekNum){
   const overrideBadge=isOverride?'<span style="font-size:10px;background:rgba(255,170,50,0.15);color:#FFAA32;padding:2px 7px;border-radius:10px;margin-left:6px">Wk'+weekNum+' override</span>':'';
   // RPE: target badge + actual input (skip for tick-only exercises)
   const rpeKey='rpe_'+sessionIdx+'_'+exIdx;
-  const rpeTargetVal=ex.rpeTarget||null;
+  const rpeTargetVal=(presc.rpeTarget!==undefined&&presc.rpeTarget!==null)?presc.rpeTarget:(ex.rpeTarget||null);
   const rpeBadge=rpeTargetVal?'<span style="font-size:10px;background:rgba(74,158,255,0.15);color:#4A9EFF;padding:2px 7px;border-radius:10px;margin-left:6px">RPE '+rpeTargetVal+'</span>':'';
   const rpeRow='<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a">'
     +'<div style="font-size:12px;color:#666;flex:1">Actual RPE'+(rpeTargetVal?' <span style="color:#4A9EFF">(target '+rpeTargetVal+')</span>':'')+'</div>'
@@ -1861,7 +1905,7 @@ async function finishSession(programId,dateKey,sessionIdx){
           :Math.max(...setValues);
         const rpeRaw=logData['rpe_'+sessionIdx+'_'+ei];
         const rpeActual=rpeRaw?parseFloat(rpeRaw):null;
-        await saveCW({exId:ex.exId,exerciseName:exData.name,date:getCompletionDate(),sets:setValues,reps:reps||null,maxVal,rpeTarget:ex.rpeTarget||null,rpeActual:isNaN(rpeActual)?null:rpeActual});
+        await saveCW({exId:ex.exId,exerciseName:exData.name,date:getCompletionDate(),sets:setValues,reps:reps||null,maxVal,rpeTarget:(presc.rpeTarget!==undefined&&presc.rpeTarget!==null)?presc.rpeTarget:(ex.rpeTarget||null),rpeActual:isNaN(rpeActual)?null:rpeActual});
         const existing=getPRs().find(p=>p.exercise===exData.name);
         if(isTimeUnit){
           // Faster time = new PR
@@ -2110,7 +2154,8 @@ function renderProgramDetail(){
           const rec=getWorkouts().find(x=>x.exercises&&x.exercises.freeform&&x.exercises.dateKey===dk&&x.exercises.sessionIdx===si);
           if(rec&&rec.exercises.blocks&&rec.exercises.blocks.length){
             if(rec.exercises.format)html+='<div style="font-size:11px;color:#4A9EFF;font-weight:600;margin-top:4px">'+rec.exercises.format.charAt(0).toUpperCase()+rec.exercises.format.slice(1)+'</div>';
-            if(rec.exercises.distance)html+='<div style="font-size:11px;color:#64C8FF;font-weight:600;margin-top:4px">'+rec.exercises.distance.toLocaleString()+'m</div>';
+            if(rec.exercises.distance){const du=rec.exercises.unit==='km'?(rec.exercises.distance/1000).toFixed(2).replace(/\.?0+$/,'')+'km':rec.exercises.distance.toLocaleString()+'m';html+='<div style="font-size:11px;color:#64C8FF;font-weight:600;margin-top:4px">'+du+(rec.exercises.rpe?' &middot; RPE '+rec.exercises.rpe:'')+'</div>';}
+            else if(rec.exercises.rpe)html+='<div style="font-size:11px;color:#FFAA32;font-weight:600;margin-top:4px">RPE '+rec.exercises.rpe+'</div>';
             rec.exercises.blocks.forEach(b=>{
               if(b.label)html+='<div style="font-size:11px;color:#4A9EFF;font-weight:700;margin-top:6px">Block '+b.label+'</div>';
               (b.lines||[]).forEach(l=>{html+='<div style="font-size:12px;color:#aaa;padding:2px 0">'+l+'</div>';});
@@ -2554,7 +2599,7 @@ function renderStep3(body){
           const phases=ex.phases||[];
           html+='<div class="phase-exercise-block"><div class="phase-ex-header">'+exData.name+'</div><div class="phase-ex-sub">Default: '+ex.sets+'x'+ex.reps+'</div><div id="phase-rows-'+globalIdx+'">';
           phases.forEach((ph,pi)=>{
-            html+='<div class="phase-override-row"><div style="flex:1"><div class="field-label" style="margin-top:0;font-size:10px">Weeks</div><div style="display:flex;gap:4px;align-items:center"><input class="field-input" style="width:48px;padding:6px;text-align:center;font-size:13px" type="number" min="1" max="'+weeks+'" value="'+ph.weekFrom+'" onchange="updatePhase('+globalIdx+','+pi+',\'weekFrom\',this.value)"><span style="color:#666;font-size:12px">-</span><input class="field-input" style="width:48px;padding:6px;text-align:center;font-size:13px" type="number" min="1" max="'+weeks+'" value="'+ph.weekTo+'" onchange="updatePhase('+globalIdx+','+pi+',\'weekTo\',this.value)"></div></div><div style="flex:1"><div class="field-label" style="margin-top:0;font-size:10px">Sets x Reps</div><div style="display:flex;gap:4px;align-items:center"><input class="field-input" style="width:44px;padding:6px;text-align:center;font-size:13px" type="number" min="1" value="'+ph.sets+'" onchange="updatePhase('+globalIdx+','+pi+',\'sets\',this.value)"><span style="color:#666;font-size:12px">x</span><input class="field-input" style="width:44px;padding:6px;text-align:center;font-size:13px" type="number" min="1" value="'+ph.reps+'" onchange="updatePhase('+globalIdx+','+pi+',\'reps\',this.value)"></div></div><button class="phase-remove-btn" onclick="removePhase('+globalIdx+','+pi+')">x</button></div>';
+            html+='<div class="phase-override-row"><div style="flex:1"><div class="field-label" style="margin-top:0;font-size:10px">Weeks</div><div style="display:flex;gap:4px;align-items:center"><input class="field-input" style="width:48px;padding:6px;text-align:center;font-size:13px" type="number" min="1" max="'+weeks+'" value="'+ph.weekFrom+'" onchange="updatePhase('+globalIdx+','+pi+',\'weekFrom\',this.value)"><span style="color:#666;font-size:12px">-</span><input class="field-input" style="width:48px;padding:6px;text-align:center;font-size:13px" type="number" min="1" max="'+weeks+'" value="'+ph.weekTo+'" onchange="updatePhase('+globalIdx+','+pi+',\'weekTo\',this.value)"></div></div><div style="flex:1"><div class="field-label" style="margin-top:0;font-size:10px">Sets x Reps</div><div style="display:flex;gap:4px;align-items:center"><input class="field-input" style="width:44px;padding:6px;text-align:center;font-size:13px" type="number" min="1" value="'+ph.sets+'" onchange="updatePhase('+globalIdx+','+pi+',\'sets\',this.value)"><span style="color:#666;font-size:12px">x</span><input class="field-input" style="width:44px;padding:6px;text-align:center;font-size:13px" type="number" min="1" value="'+ph.reps+'" onchange="updatePhase('+globalIdx+','+pi+',\'reps\',this.value)"></div></div><div><div class="field-label" style="margin-top:0;font-size:10px">RPE</div><input class="field-input" style="width:48px;padding:6px;text-align:center;font-size:13px" type="number" min="1" max="10" step="0.5" placeholder="-" value="'+(ph.rpeTarget||'')+'" onchange="updatePhase('+globalIdx+','+pi+',\'rpeTarget\',this.value)"></div><button class="phase-remove-btn" onclick="removePhase('+globalIdx+','+pi+')">x</button></div>';
           });
           html+='</div><button class="add-phase-btn" onclick="addPhase('+globalIdx+')">+ Add week override</button></div>';
         });
@@ -2569,9 +2614,13 @@ function renderStep3(body){
 }
 
 function togglePhaseDay(id){const el=document.getElementById(id),chev=document.getElementById('chev-'+id);const isOpen=el.classList.contains('open');el.classList.toggle('open',!isOpen);if(chev)chev.textContent=isOpen?'v':'^';}
-function addPhase(idx){const{ex}=window._phaseExercises[idx];if(!ex.phases)ex.phases=[];ex.phases.push({weekFrom:1,weekTo:builderState.program.totalWeeks,sets:ex.sets,reps:ex.reps});renderStep3(document.getElementById('builder-body'));}
+function addPhase(idx){const{ex}=window._phaseExercises[idx];if(!ex.phases)ex.phases=[];ex.phases.push({weekFrom:1,weekTo:builderState.program.totalWeeks,sets:ex.sets,reps:ex.reps,rpeTarget:ex.rpeTarget||null});renderStep3(document.getElementById('builder-body'));}
 function removePhase(idx,pi){const{ex}=window._phaseExercises[idx];ex.phases.splice(pi,1);renderStep3(document.getElementById('builder-body'));}
-function updatePhase(idx,pi,field,val){const{ex}=window._phaseExercises[idx];ex.phases[pi][field]=parseInt(val)||1;}
+function updatePhase(idx,pi,field,val){
+  const{ex}=window._phaseExercises[idx];
+  if(field==='rpeTarget'){ex.phases[pi].rpeTarget=val===''?null:parseFloat(val);return;}
+  ex.phases[pi][field]=parseInt(val)||1;
+}
 
 function renderStep4(body){
   const p=builderState.program;
