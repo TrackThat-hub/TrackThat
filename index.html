@@ -346,6 +346,7 @@
   <div class="pin-screen" id="pin-screen">
     <div class="pin-logo">TRACK<span style="color:#4A9EFF">THAT</span></div>
     <div class="pin-tagline">Stay consistent.</div>
+    <div id="pin-build" style="font-size:10px;color:#3a3a3a;margin-top:-40px;margin-bottom:40px;letter-spacing:0.08em"></div>
     <div class="pin-prompt">Enter your PIN</div>
     <div class="pin-dots" id="pin-dots">
       <div class="pin-dot" id="dot-0"></div><div class="pin-dot" id="dot-1"></div><div class="pin-dot" id="dot-2"></div>
@@ -420,6 +421,7 @@
         <div><div class="surf-last-label">Last Surf</div><div class="surf-last-loc" id="surf-last-loc">&#8212;</div><div class="surf-last-date" id="surf-last-date">&#8212;</div></div>
         <div style="font-size:28px">&#x1F30A;</div>
       </div>
+      <div id="home-build" style="text-align:center;font-size:10px;color:#333;margin-top:8px;letter-spacing:0.08em"></div>
       <div class="section-title">Life This Month</div>
       <div class="cal-card">
         <div class="cal-title" id="cal-combined-title"></div>
@@ -480,6 +482,7 @@
   <div class="sync-indicator" id="sync-indicator"></div>
 
 <script>
+const APP_BUILD='2026-08-15.4';
 const SUPABASE_URL='https://oghklpapxofkljxupjix.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9naGtscGFweG9ma2xqeHVwaml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMDQyMzQsImV4cCI6MjA5Mzg4MDIzNH0.VETDD2BpVHAKJtAQaXmrSYFXOtTI-6NKZcHkAJebO0I';
 
@@ -569,6 +572,7 @@ function pinPress(d){if(pinEntry.length>=6)return;pinEntry+=d;updatePinDots();if
 function pinDelete(){if(!pinEntry.length)return;pinEntry=pinEntry.slice(0,-1);updatePinDots();document.getElementById('pin-error').textContent='';}
 function updatePinDots(){for(let i=0;i<6;i++){const d=document.getElementById('dot-'+i);d.classList.toggle('filled',i<pinEntry.length);d.classList.remove('error');}}
 async function checkPin(){if(pinEntry===CORRECT_PIN){localStorage.setItem('tt_pin_unlocked','true');localStorage.setItem('tt_pin_time',Date.now().toString());await loadAllData();showApp();}else{for(let i=0;i<6;i++)document.getElementById('dot-'+i).classList.add('error');document.getElementById('pin-error').textContent='Incorrect PIN. Try again.';setTimeout(()=>{pinEntry='';updatePinDots();},800);}}
+stampBuild();
 checkPinSession();
 
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -692,6 +696,12 @@ function showPage(pageId,btn){
   if(pageId==='history')renderExerciseHistory();
 }
 
+function stampBuild(){
+  const a=document.getElementById('pin-build');
+  const b=document.getElementById('home-build');
+  if(a)a.textContent='BUILD '+APP_BUILD;
+  if(b)b.textContent='TrackThat build '+APP_BUILD;
+}
 function setHeaderDate(){document.getElementById('todays-date').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});}
 
 function drawSparkline(){
@@ -1121,7 +1131,17 @@ function sessionTypeColour(t){
   return s==='swim'?'#64C8FF':s==='run'?'#FF8C00':s==='mobility'?'#FFC864':s==='hyrox'?'#FF5050':s==='conditioning'?'#B47CFF':'#4A9EFF';
 }
 // A session counts as scheduled if it has exercises, a mobility block, or is a freeform type
-function sessionIsScheduled(s){return (s.exercises&&s.exercises.length>0)||s.mobilityBlock||isFreeform(s.type);}
+function sessionIsScheduled(s){
+  if(!s)return false;
+  if(s.exercises&&s.exercises.length>0)return true;
+  if(s.mobilityBlock)return true;
+  if(isFreeform(s.type))return true;
+  // Belt and braces: a session that was deliberately created (has a label, notes
+  // or a non-gym type) should never silently disappear from the week view.
+  if(s.notes&&String(s.notes).trim())return true;
+  if(s.label&&String(s.label).trim())return true;
+  return false;
+}
 
 function renderActiveProgramOverview(program,body){
   const today=todayStr(),startDate=program.startDate||today;
@@ -3361,7 +3381,7 @@ async function deleteStlLanguage(id){
 }
 
 function initApp(){
-  setHeaderDate();drawSparkline();renderTrainingStats();renderInsights();
+  stampBuild();setHeaderDate();drawSparkline();renderTrainingStats();renderInsights();
   renderProgramCard();renderSurfStats();renderCalendars();renderExerciseBank();
 }
 </script>
