@@ -482,7 +482,7 @@
   <div class="sync-indicator" id="sync-indicator"></div>
 
 <script>
-const APP_BUILD='2026-08-15.5';
+const APP_BUILD='2026-08-15.6';
 const SUPABASE_URL='https://oghklpapxofkljxupjix.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9naGtscGFweG9ma2xqeHVwaml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMDQyMzQsImV4cCI6MjA5Mzg4MDIzNH0.VETDD2BpVHAKJtAQaXmrSYFXOtTI-6NKZcHkAJebO0I';
 
@@ -547,6 +547,13 @@ function getExercises(){return DB.exercises;}
 function getStartDate(){return DB.settings.start_date||todayStr();}
 function getBestStreak(){return parseInt(DB.settings.best_streak||'0');}
 async function saveBestStreak(v){DB.settings.best_streak=String(v);await sbUpsert('app_settings',{key:'best_streak',value:String(v)});}
+// Sessions actually completed for a program, counted from completed_sessions.
+// Used everywhere instead of the stored counter so the ring, the stats and the
+// session cards can never disagree with each other.
+function completedCount(program){
+  if(!program)return 0;
+  return getCSN().filter(c=>c.programId===program.id).length;
+}
 function getCSN(){return DB.completed_sessions.map(c=>({programId:c.program_id||c.programId,dateKey:c.date_key||c.dateKey,sessionIdx:c.session_idx!==undefined?c.session_idx:c.sessionIdx}));}
 function getCWN(){return DB.completed_workouts.map(c=>({exId:c.ex_id||c.exId,exerciseName:c.exercise_name||c.exerciseName,date:c.date,sets:c.sets,reps:c.reps,maxVal:c.max_val!==undefined?c.max_val:c.maxVal,rpeTarget:c.rpe_target!==undefined?c.rpe_target:c.rpeTarget,rpeActual:c.rpe_actual!==undefined?c.rpe_actual:c.rpeActual}));}
 
@@ -567,7 +574,16 @@ async function deleteSport(id){DB.sports=DB.sports.filter(s=>s.id!==id);await sb
 function getLanguage(){return DB.language;}
 async function saveLanguageEntry(l){DB.language.push(l);await sbUpsert('language',{id:l.id,date:l.date,type:l.type,language:l.language||'Spanish',duration:l.duration,notes:l.notes||''});}
 async function deleteLanguageEntry(id){DB.language=DB.language.filter(l=>l.id!==id);await sbDel('language',id);}
-async function saveCS(cs){DB.completed_sessions.push(cs);await sbUpsert('completed_sessions',{program_id:cs.programId,date_key:cs.dateKey,session_idx:cs.sessionIdx,completed_at:cs.completedAt});}
+async function saveCS(cs){
+  DB.completed_sessions.push(cs);
+  const ok=await sbUpsert('completed_sessions',{program_id:cs.programId,date_key:cs.dateKey,session_idx:cs.sessionIdx,completed_at:cs.completedAt});
+  if(!ok){
+    // One retry, then tell the user rather than leaving the session silently unticked
+    const retry=await sbUpsert('completed_sessions',{program_id:cs.programId,date_key:cs.dateKey,session_idx:cs.sessionIdx,completed_at:cs.completedAt});
+    if(!retry)alert('Heads up: this session was logged but did not save as complete. Check your connection and tap Finish again.');
+  }
+  return ok;
+}
 async function saveCW(cw){DB.completed_workouts.push(cw);await sbUpsert('completed_workouts',{ex_id:cw.exId,exercise_name:cw.exerciseName,date:cw.date,sets:cw.sets,reps:cw.reps,max_val:cw.maxVal,rpe_target:cw.rpeTarget||null,rpe_actual:cw.rpeActual||null});}
 async function saveExDb(ex){DB.exercises.push(ex);await sbUpsert('exercises',{id:ex.id,name:ex.name,category:ex.category,unit:ex.unit,bw_weighted:ex.bwWeighted||false,description:ex.description||''});}
 async function updateExDb(ex){const i=DB.exercises.findIndex(e=>e.id===ex.id);if(i>-1)DB.exercises[i]=ex;await sbUpsert('exercises',{id:ex.id,name:ex.name,category:ex.category,unit:ex.unit,bw_weighted:ex.bwWeighted||false,description:ex.description||''});}
@@ -877,9 +893,9 @@ function renderInsights(){
     // count completed sessions this week
     const cs=getCSN();
     const completed=cs.filter(c=>c.programId===active.id&&weekDates.includes(c.dateKey)).length;
-    // also count any ad-hoc workouts logged this week (not from program)
-    const adHoc=workouts.filter(w=>weekDates.includes(w.date)).length;
-    const total=Math.max(completed,adHoc);
+    // Count only genuinely ticked-off sessions. Taking the max against raw
+    // workout rows used to hide missing completed_sessions writes.
+    const total=completed;
     if(scheduled>0){
       wEl.textContent=total+' of '+scheduled;
       wEl.className='i-value '+(total>=scheduled?'positive':total>=Math.floor(scheduled/2)?'blue':'negative');
@@ -912,7 +928,8 @@ function renderProgramCard(){
   const el=document.getElementById('home-program-section');
   if(!active){el.innerHTML='<div class="empty-state"><p>No active program.</p><button class="btn" onclick="showPage(\'designer\',document.querySelectorAll(\'.nav button\')[2])">Go to Program Designer</button></div>';return;}
   const currentWeek=computeCurrentWeek(active);
-  const pct=Math.round(((active.completedWorkouts||0)/active.totalWorkouts)*100);
+  const doneCount=completedCount(active);
+  const pct=Math.round((doneCount/active.totalWorkouts)*100);
   // Build today's session preview
   const today=todayStr();
   const todayData=active.days&&active.days.find(d=>d.dateKey===today);
@@ -953,7 +970,7 @@ function renderProgramCard(){
     +'<div class="program-week">Week '+currentWeek+' of '+active.totalWeeks+'</div>'
     +'</div>'
     +'<div class="program-focus" style="margin-bottom:6px">'+active.focus+'</div>'
-    +'<div style="font-size:12px;color:#888">'+(active.completedWorkouts||0)+' of '+active.totalWorkouts+' sessions done</div>'
+    +'<div style="font-size:12px;color:#888">'+doneCount+' of '+active.totalWorkouts+' sessions done</div>'
     +'</div>'
     +'</div>'
     +todayHtml
@@ -1282,7 +1299,7 @@ function renderActiveProgramOverview(program,body){
   });
 
   body.innerHTML='<div class="section-title" style="margin-top:4px">'+program.name+'</div>'
-    +'<div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:'+Math.round(((program.completedWorkouts||0)/program.totalWorkouts)*100)+'%"></div></div>'
+    +'<div class="progress-bar-bg" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:'+Math.round((completedCount(program)/program.totalWorkouts)*100)+'%"></div></div>'
     +weekNavHtml
     +'<div class="week-strip">'+stripHtml+'</div>'
     +nextHtml
