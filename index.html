@@ -482,12 +482,31 @@
   <div class="sync-indicator" id="sync-indicator"></div>
 
 <script>
-const APP_BUILD='2026-08-15.6';
+const APP_BUILD='2026-08-15.7';
 const SUPABASE_URL='https://oghklpapxofkljxupjix.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9naGtscGFweG9ma2xqeHVwaml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMDQyMzQsImV4cCI6MjA5Mzg4MDIzNH0.VETDD2BpVHAKJtAQaXmrSYFXOtTI-6NKZcHkAJebO0I';
 
 async function sbGet(t){try{const r=await fetch(`${SUPABASE_URL}/rest/v1/${t}?select=*`,{headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});const j=await r.json();return Array.isArray(j)?j:[];}catch(e){return[];}}
-async function sbUpsert(t,d){showSync('saving');try{const r=await fetch(`${SUPABASE_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(d)});showSync('saved');return r.ok;}catch(e){showSync('error');return false;}}
+async function sbUpsert(t,d){
+  showSync('saving');
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(d)});
+    if(!r.ok){
+      // A rejected write used to still show "Saved" - surface it instead
+      let detail='';
+      try{const j=await r.json();detail=j.message||j.hint||JSON.stringify(j);}catch(e){}
+      console.error('Supabase write failed on "'+t+'":',r.status,detail,d);
+      showSync('error');
+      return false;
+    }
+    showSync('saved');
+    return true;
+  }catch(e){
+    console.error('Supabase write error on "'+t+'":',e);
+    showSync('error');
+    return false;
+  }
+}
 async function sbDel(t,id){showSync('saving');try{await fetch(`${SUPABASE_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}});showSync('saved');}catch(e){showSync('error');}}
 function showSync(s){const el=document.getElementById('sync-indicator');el.className='sync-indicator '+s;el.textContent=s==='saving'?'Saving...':s==='saved'?'Saved':'Save failed';if(s!=='saving')setTimeout(()=>el.className='sync-indicator',2000);}
 
@@ -567,7 +586,12 @@ async function saveMobility(m){DB.mobility.push(m);await sbUpsert('mobility',{id
 async function deleteMobility(id){DB.mobility=DB.mobility.filter(m=>m.id!==id);await sbDel('mobility',id);}
 async function saveBook(b){const i=DB.books.findIndex(x=>x.id===b.id);if(i>-1)DB.books[i]=b;else DB.books.push(b);await sbUpsert('books',{id:b.id,data:b});}
 async function deleteBook(id){DB.books=DB.books.filter(b=>b.id!==id);await sbDel('books',id);}
-async function saveMindfulness(m){DB.mindfulness.push(m);await sbUpsert('mindfulness',{id:m.id,date:m.date,type:m.type,duration:m.duration,notes:m.notes||''});}
+async function saveMindfulness(m){
+  const ok=await sbUpsert('mindfulness',{id:m.id,date:m.date,type:m.type,duration:m.duration,notes:m.notes||''});
+  if(ok)DB.mindfulness.push(m);
+  else alert('That session did not save. Check your connection and try again.');
+  return ok;
+}
 async function deleteMindfulness(id){DB.mindfulness=DB.mindfulness.filter(m=>m.id!==id);await sbDel('mindfulness',id);}
 async function saveSport(s){DB.sports.push(s);await sbUpsert('sports',{id:s.id,sport:s.sport,date:s.date,notes:s.notes||''});}
 async function deleteSport(id){DB.sports=DB.sports.filter(s=>s.id!==id);await sbDel('sports',id);}
