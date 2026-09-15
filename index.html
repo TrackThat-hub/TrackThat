@@ -482,7 +482,7 @@
   <div class="sync-indicator" id="sync-indicator"></div>
 
 <script>
-const APP_BUILD='2026-08-15.7';
+const APP_BUILD='2026-09-15.1';
 const SUPABASE_URL='https://oghklpapxofkljxupjix.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9naGtscGFweG9ma2xqeHVwaml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMDQyMzQsImV4cCI6MjA5Mzg4MDIzNH0.VETDD2BpVHAKJtAQaXmrSYFXOtTI-6NKZcHkAJebO0I';
 
@@ -2409,7 +2409,7 @@ function jumpBuilderStep(s){
 
 function renderStep1(body){
   const p=builderState.program;
-  body.innerHTML='<div class="field-label">Program Name</div><input class="field-input" id="b-name" type="text" placeholder="e.g. Push Pull Legs" value="'+p.name+'"><div class="field-label">Focus</div><select class="field-input" id="b-focus">'+['Strength','Hypertrophy','Power','Speed','Muscular Endurance','Aerobic Conditioning','Mobility','Recovery'].map(f=>'<option value="'+f+'"'+(p.focus===f?' selected':'')+'>'+f+'</option>').join('')+'</select><div class="field-label">Goal Description</div><textarea class="field-input" id="b-description" rows="3" placeholder="What do you want to achieve...">'+p.description+'</textarea><div class="field-label">Start Date</div><input class="field-input" id="b-startdate" type="date" value="'+p.startDate+'"><div class="field-label">Duration</div><select class="field-input" id="b-weeks">'+[4,6,8,10,12].map(w=>'<option value="'+w+'"'+(p.totalWeeks==w?' selected':'')+'>'+w+' weeks</option>').join('')+'</select><div class="builder-nav"><button class="btn-outline" onclick="showDesignerSection(\'programs\',document.querySelectorAll(\'#designer .sub-btn\')[1])">Cancel</button><button class="btn" style="flex:1;margin-top:0" onclick="saveStep1()">Next - Build Days</button></div>';
+  body.innerHTML='<div class="field-label">Program Name</div><input class="field-input" id="b-name" type="text" placeholder="e.g. Push Pull Legs" value="'+p.name+'"><div class="field-label">Focus</div><select class="field-input" id="b-focus">'+['Strength','Hypertrophy','Power','Speed','Muscular Endurance','Aerobic Conditioning','Mobility','Recovery'].map(f=>'<option value="'+f+'"'+(p.focus===f?' selected':'')+'>'+f+'</option>').join('')+'</select><div class="field-label">Goal Description</div><textarea class="field-input" id="b-description" rows="3" placeholder="What do you want to achieve...">'+p.description+'</textarea><div class="field-label">Start Date</div><input class="field-input" id="b-startdate" type="date" value="'+p.startDate+'"><div class="field-label">Duration</div><select class="field-input" id="b-weeks">'+[4,6,7,8,10,12].map(w=>'<option value="'+w+'"'+(p.totalWeeks==w?' selected':'')+'>'+w+' weeks</option>').join('')+'</select><div class="builder-nav"><button class="btn-outline" onclick="showDesignerSection(\'programs\',document.querySelectorAll(\'#designer .sub-btn\')[1])">Cancel</button><button class="btn" style="flex:1;margin-top:0" onclick="saveStep1()">Next - Build Days</button></div>';
 }
 
 function saveStep1(){
@@ -2693,8 +2693,8 @@ function formatPrescription(unit,ex){
   return (ex.sets||'--')+' x '+(ex.reps||'--');
 }
 
-function saveStep2(){if(!builderState.program.days.length){alert('Please add sessions to at least one day');return;}builderState.step=builderState.program.totalWeeks>=8?3:4;renderBuilder();}
-function builderBack(){builderState.step=Math.max(1,builderState.step-1);if(builderState.step===3&&builderState.program.totalWeeks<8)builderState.step=2;renderBuilder();}
+function saveStep2(){if(!builderState.program.days.length){alert('Please add sessions to at least one day');return;}builderState.step=builderState.program.totalWeeks>=6?3:4;renderBuilder();}
+function builderBack(){builderState.step=Math.max(1,builderState.step-1);if(builderState.step===3&&builderState.program.totalWeeks<6)builderState.step=2;renderBuilder();}
 
 function openExercisePicker(dk,si){
   pickerTargetSession={dk,si};
